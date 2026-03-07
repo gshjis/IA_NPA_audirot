@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.py.class
 *.so
+.mypy_cache/
 
 # C extensions
 *.egg-info/
@@ -52,3 +53,6 @@ htmlcov/
 
 # Testing
 .pytest_cache/
+
+# Data
+documents
