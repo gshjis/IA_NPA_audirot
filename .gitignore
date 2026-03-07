@@ -1,0 +1,54 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.py.class
+*.so
+
+# C extensions
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+
+# Dependencies
+requirements.txt
+Pipfile.lock
+poetry.lock
+
+# Data files
+*.pdf
+*.docx
+*.xlsx
+data/
+output/
+
+# Python cache
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Testing
+.pytest_cache/
