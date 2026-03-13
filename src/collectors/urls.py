@@ -1,1 +1,0 @@
-constitution_url = "https://pravo.by/pravovaya-informatsiya/normativnye-dokumenty/konstitutsiya-respubliki-belarus/"
