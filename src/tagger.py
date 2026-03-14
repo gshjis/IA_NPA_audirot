@@ -39,7 +39,7 @@ class LegalSemanticTagger:
     Теги загружаются из внешнего JSON-файла.
     """
     
-    def __init__(self, tags_filepath="base.json", model_name='paraphrase-multilingual-MiniLM-L12-v2', training_corpus=None, article_weights=None, noisy_articles=None):
+    def __init__(self, tags_filepath="data/raw/base.json", model_name='paraphrase-multilingual-MiniLM-L12-v2', training_corpus=None, article_weights=None, noisy_articles=None):
         """
         Инициализация с загрузкой тегов из JSON и обучающим корпусом.
         """

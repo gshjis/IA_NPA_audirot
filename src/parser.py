@@ -68,19 +68,20 @@ def parse_constitution_to_json(text: str) -> List[Dict[str, Any]]:
             
     return data
 
+
 def main():
     # Чтение из файла
-    with open('hypotesys/const.txt', 'r', encoding='utf-8') as f:
+    with open('data/raw/const.txt', 'r', encoding='utf-8') as f:
         text = f.read()
         
     # Парсинг
     articles = parse_constitution_to_json(text)
     
     # Запись в JSON
-    with open('hypotesys/const.json', 'w', encoding='utf-8') as f:
+    with open('data/processed/const.json', 'w', encoding='utf-8') as f:
         json.dump(articles, f, ensure_ascii=False, indent=4)
         
-    print("Конституция успешно преобразована в hypotesys/const.json")
+    print("Конституция успешно преобразована в data/processed/const.json")
 
 if __name__ == "__main__":
     main()
