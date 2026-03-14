@@ -5,6 +5,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Dict, Any
 import json
 import os
+from src.logger import logger
 
 def load_tags_from_json(filepath="base.json"):
     """
@@ -23,13 +24,13 @@ def load_tags_from_json(filepath="base.json"):
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             tag_data = json.load(f)
-        print(f"✓ Загружено {len(tag_data)} тегов из {filepath}")
+        logger.info(f"Загружено {len(tag_data)} тегов из {filepath}")
         return tag_data
     except FileNotFoundError:
-        print(f"✗ Файл {filepath} не найден")
+        logger.error(f"Файл {filepath} не найден")
         return {}
     except json.JSONDecodeError:
-        print(f"✗ Ошибка парсинга JSON в {filepath}")
+        logger.error(f"Ошибка парсинга JSON в {filepath}")
         return {}
 
 
@@ -55,39 +56,40 @@ class LegalSemanticTagger:
         self.noisy_articles = set(noisy_articles or [])
         
         if not self.tag_keywords:
+            logger.error(f"Не удалось загрузить теги из {tags_filepath}")
             raise ValueError(f"Не удалось загрузить теги из {tags_filepath}")
         
         # Загружаем модель
-        print(f"Загрузка модели {model_name}...")
+        logger.info(f"Загрузка модели {model_name}...")
         self.model = SentenceTransformer(model_name)
-        print("Модель загружена")
+        logger.info("Модель загружена")
         
         # Преобразуем теги в описания для эмбеддингов
         self.tag_names = list(self.tag_keywords.keys())
         self.tag_descriptions = [". ".join(self.tag_keywords[tag]) for tag in self.tag_names]
         
-        print(f"Создано {len(self.tag_descriptions)} описаний тегов")
+        logger.info(f"Создано {len(self.tag_descriptions)} описаний тегов")
         
         # Вычисляем эмбеддинги для тегов (один раз)
-        print("Вычисление эмбеддингов для тегов...")
+        logger.info("Вычисление эмбеддингов для тегов...")
         self.tag_embeddings = self.model.encode(self.tag_descriptions, normalize_embeddings=True)
         
         # Предварительно вычисляем эмбеддинги корпуса для быстрого поиска
         self.tagged_corpus = []
         if self.training_corpus:
-            print("Тегирование обучающего корпуса...")
+            logger.info("Тегирование обучающего корпуса...")
             self.tagged_corpus = self.assign_tags(self.training_corpus)
             
-        print("Готово")
+        logger.info("Инициализация завершена")
     
     def assign_tags(self, articles_list: List[str], tags_per_article: int = 15) -> List[Dict[str, Any]]:
         """
         Присваивает теги статьям на основе семантической близости.
         """
-        print(f"Вычисление эмбеддингов для {len(articles_list)} статей...")
+        logger.info(f"Вычисление эмбеддингов для {len(articles_list)} статей...")
         article_embeddings = self.model.encode(articles_list, normalize_embeddings=True)
         
-        print("Вычисление схожести с тегами...")
+        logger.info("Вычисление схожести с тегами...")
         similarities = cosine_similarity(article_embeddings, self.tag_embeddings)
         
         tagged_articles = []
@@ -122,6 +124,7 @@ class LegalSemanticTagger:
         """
         Получить рекомендации тегов для одного текста.
         """
+        logger.info(f"Получение рекомендаций тегов для текста длиной {len(text)}...")
         text_embedding = self.model.encode([text], normalize_embeddings=True)
         similarities = cosine_similarity(text_embedding, self.tag_embeddings)[0]
         
@@ -130,6 +133,7 @@ class LegalSemanticTagger:
             if score >= threshold:
                 recommendations[self.tag_names[i]] = float(score)
         
+        logger.info(f"Найдено {len(recommendations)} тегов выше порога {threshold}")
         return dict(sorted(recommendations.items(), key=lambda x: x[1], reverse=True))
 
     def find_articles_by_new_sentence(self, new_sentence: str, k: int = 5, expand_query: bool = False) -> List[Dict[str, Any]]:
@@ -137,18 +141,22 @@ class LegalSemanticTagger:
         Находит топ-k статей, вычисляя косинусное сходство между вектором тегов
         нового предложения и вектором тегов каждой статьи.
         """
+        logger.info(f"Поиск статей для запроса: '{new_sentence[:50]}...'")
         if not self.tagged_corpus:
+            logger.warning("Обучающий корпус пуст, поиск невозможен")
             return []
             
         # 1. Получаем теги и их релевантность для нового предложения
         query = new_sentence
         if expand_query:
+            logger.info("Расширение запроса синонимами...")
             tags_rec = self.get_tag_recommendations(new_sentence, threshold=0.5)
             synonyms = []
             for tag in tags_rec:
                 synonyms.extend(self.tag_keywords.get(tag, []))
             if synonyms:
                 query = f"{new_sentence}. {' '.join(set(synonyms))}"
+                logger.info(f"Запрос расширен: '{query[:50]}...'")
         
         query_tags_rec = self.get_tag_recommendations(query, threshold=0.25)
         
@@ -157,6 +165,7 @@ class LegalSemanticTagger:
         query_norm = np.linalg.norm(query_vector)
         
         if query_norm == 0:
+            logger.warning("Вектор запроса пуст")
             return []
         
         # 2. Вычисляем косинусное сходство для каждой статьи
@@ -205,4 +214,5 @@ class LegalSemanticTagger:
             if len(final_results) >= k:
                 break
         
+        logger.info(f"Найдено {len(final_results)} статей")
         return final_results
