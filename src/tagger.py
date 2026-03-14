@@ -150,7 +150,7 @@ class LegalSemanticTagger:
             if synonyms:
                 query = f"{new_sentence}. {' '.join(set(synonyms))}"
         
-        query_tags_rec = self.get_tag_recommendations(query, threshold=0.15)
+        query_tags_rec = self.get_tag_recommendations(query, threshold=0.25)
         
         # Преобразуем в вектор (numpy)
         query_vector = np.array([query_tags_rec.get(tag, 0.0) for tag in self.tag_names])
@@ -177,24 +177,32 @@ class LegalSemanticTagger:
             # Гибридный бонус: бонус за совпадение топ-3 тегов
             target_tags = sorted(query_tags_rec, key=lambda k: query_tags_rec[k], reverse=True)[:3]
             article_tag_set = set(article_tags_rec.keys())
-            bonus = 0.0
-            for tag in target_tags:
-                if tag in article_tag_set:
-                    bonus += 0.1
+            bonus = 0.05 * len(set(target_tags).intersection(article_tag_set))
             score += bonus
+            score = min(score, 1.0)
             
             # Применяем фильтр шума и веса статей
             if i in self.noisy_articles:
                 score = 0.0
             else:
-                score *= self.article_weights.get(i, 1.0)
+                score *= self.article_weights[i]
             
             results.append({
                 "text": article["text"],
                 "score": float(score)
             })
             
-        # 3. Сортируем по убыванию релевантности и берем топ-k
+        # 3. Сортируем и применяем базовый diversity
         results.sort(key=lambda x: x["score"], reverse=True)
         
-        return results[:k]
+        final_results = []
+        seen_texts = set()
+        for res in results:
+            text_hash = hash(res["text"])
+            if text_hash not in seen_texts:
+                final_results.append(res)
+                seen_texts.add(text_hash)
+            if len(final_results) >= k:
+                break
+        
+        return final_results
