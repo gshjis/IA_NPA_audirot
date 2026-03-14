@@ -73,12 +73,10 @@ class LegalSemanticTagger:
         self.tag_embeddings = self.model.encode(self.tag_descriptions, normalize_embeddings=True)
         
         # Предварительно вычисляем эмбеддинги корпуса для быстрого поиска
-        self.corpus_embeddings = None
         self.tagged_corpus = []
         if self.training_corpus:
-            print("Тегирование и вычисление эмбеддингов обучающего корпуса...")
+            print("Тегирование обучающего корпуса...")
             self.tagged_corpus = self.assign_tags(self.training_corpus)
-            self.corpus_embeddings = self.model.encode(self.training_corpus, normalize_embeddings=True)
             
         print("Готово")
     
@@ -134,7 +132,7 @@ class LegalSemanticTagger:
         
         return dict(sorted(recommendations.items(), key=lambda x: x[1], reverse=True))
 
-    def find_articles_by_new_sentence(self, new_sentence: str, k: int = 5) -> List[Dict[str, Any]]:
+    def find_articles_by_new_sentence(self, new_sentence: str, k: int = 5, expand_query: bool = False) -> List[Dict[str, Any]]:
         """
         Находит топ-k статей, вычисляя косинусное сходство между вектором тегов
         нового предложения и вектором тегов каждой статьи.
@@ -143,7 +141,16 @@ class LegalSemanticTagger:
             return []
             
         # 1. Получаем теги и их релевантность для нового предложения
-        query_tags_rec = self.get_tag_recommendations(new_sentence, threshold=0.0)
+        query = new_sentence
+        if expand_query:
+            tags_rec = self.get_tag_recommendations(new_sentence, threshold=0.5)
+            synonyms = []
+            for tag in tags_rec:
+                synonyms.extend(self.tag_keywords.get(tag, []))
+            if synonyms:
+                query = f"{new_sentence}. {' '.join(set(synonyms))}"
+        
+        query_tags_rec = self.get_tag_recommendations(query, threshold=0.15)
         
         # Преобразуем в вектор (numpy)
         query_vector = np.array([query_tags_rec.get(tag, 0.0) for tag in self.tag_names])
@@ -167,12 +174,20 @@ class LegalSemanticTagger:
                 # Косинусное сходство: (A · B) / (||A|| * ||B||)
                 score = np.dot(query_vector, article_vector) / (query_norm * article_norm)
             
-            # Применяем веса статей
-            score *= self.article_weights[i]
+            # Гибридный бонус: бонус за совпадение топ-3 тегов
+            target_tags = sorted(query_tags_rec, key=lambda k: query_tags_rec[k], reverse=True)[:3]
+            article_tag_set = set(article_tags_rec.keys())
+            bonus = 0.0
+            for tag in target_tags:
+                if tag in article_tag_set:
+                    bonus += 0.1
+            score += bonus
             
-            # Фильтруем "шумные" статьи
+            # Применяем фильтр шума и веса статей
             if i in self.noisy_articles:
-                score = -1.0
+                score = 0.0
+            else:
+                score *= self.article_weights.get(i, 1.0)
             
             results.append({
                 "text": article["text"],
