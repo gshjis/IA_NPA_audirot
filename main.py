@@ -1,5 +1,5 @@
 import json
-from src.tagger import LegalSemanticTagger
+from src.search import LegalSemanticSearchEngine
 
 def main():
     # Загрузка данных
@@ -9,7 +9,7 @@ def main():
     articles_text = [a['content'] for a in articles_data]
     
     # Инициализация теггера
-    tagger = LegalSemanticTagger(
+    tagger = LegalSemanticSearchEngine(
         tags_filepath='data/raw/base.json',
         training_corpus=articles_text
     )
