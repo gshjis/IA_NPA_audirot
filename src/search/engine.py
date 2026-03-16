@@ -90,10 +90,16 @@ class LegalSemanticSearchEngine:
         self.tagged_corpus = []
         if self.training_corpus:
             logger.info("Тегирование обучающего корпуса...")
-            self.tagged_corpus = self.assign_tags(self.training_corpus, tags_per_article=self.tags_per_article)
+            # Извлекаем тексты для эмбеддингов
+            texts = [article["content"] if isinstance(article, dict) else article for article in self.training_corpus]
+            self.tagged_corpus = self.assign_tags(texts, tags_per_article=self.tags_per_article)
+            
+            # Сохраняем оригинальные объекты статей
+            for i, article in enumerate(self.training_corpus):
+                self.tagged_corpus[i]["original_data"] = article
             
             # Вычисляем или загружаем эмбеддинги статей
-            self.article_embeddings = self._load_or_compute_embeddings("article_embeddings.npy", self.training_corpus)
+            self.article_embeddings = self._load_or_compute_embeddings("article_embeddings.npy", texts)
             
         # Вычисляем IDF веса
         self.idf_weights = self._compute_idf()
@@ -271,8 +277,11 @@ class LegalSemanticSearchEngine:
                 score = (0.4 * similarity + 0.6 * coverage) - penalty
                     
             results.append({
-                "text": article["text"],
-                "score": float(score)
+                "article": article.get("original_data", {"content": article["text"]}),
+                "score": float(score),
+                "query_tags": query_tags_rec,
+                "article_tags": article.get("tag_scores", {}),
+                "common_tags": common_tags
             })
             
         # 3. Сортируем и применяем базовый diversity
@@ -281,9 +290,12 @@ class LegalSemanticSearchEngine:
         final_results = []
         seen_texts = set()
         for res in results:
-            if res["text"] not in seen_texts:
+            # Используем контент статьи для дедупликации
+            article = res["article"]
+            article_content = article.get("content", str(article)) if isinstance(article, dict) else str(article)
+            if article_content not in seen_texts:
                 final_results.append(res)
-                seen_texts.add(res["text"])
+                seen_texts.add(article_content)
             if len(final_results) >= k:
                 break
         
