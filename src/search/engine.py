@@ -1,11 +1,12 @@
 import numpy as np
+import hashlib
+import json
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from src.logger import logger
 from src.loader import load_json
-from typing import Optional
 
 class LegalSemanticSearchEngine:
     """
@@ -30,13 +31,19 @@ class LegalSemanticSearchEngine:
         return idf
 
     def __init__(
-        self, 
-        tags_filepath="data/raw/base.json", 
-        model_name='deepvk/USER2-base', 
-        training_corpus=None, 
-        cache_dir="data/cache", 
-        tags_per_article:int = 50
+        self,
+        tags_filepath="data/raw/base.json",
+        model_name='deepvk/USER2-base',
+        training_corpus=None,
+        cache_dir="scripts/data/cache",
+        tags_per_article:int = 50,
+        similarity_weight: float = 0.4,
+        coverage_weight: float = 0.6,
+        penalty_factor: float = 0.5
     ):
+        self.similarity_weight = similarity_weight
+        self.coverage_weight = coverage_weight
+        self.penalty_factor = penalty_factor
         """
         Инициализация движка поиска.
 
@@ -68,13 +75,12 @@ class LegalSemanticSearchEngine:
         
         # Загружаем модель (локально)
         logger.info(f"Загрузка модели {model_name}...")
-        # Попытка загрузки из локального кэша, если не удается - из интернета
-        try:
-            logger.info(f"Попытка загрузки модели из локального кэша: {model_name}...")
-            self.model = SentenceTransformer(model_name, cache_folder=str(self.cache_dir / "models"), local_files_only=True)
-        except Exception:
-            logger.info(f"Модель не найдена локально, загрузка из интернета...")
-            self.model = SentenceTransformer(model_name, cache_folder=str(self.cache_dir / "models"), local_files_only=False)
+        
+        self.model = SentenceTransformer(
+            model_name,
+            cache_folder=str(self.cache_dir / "models"),
+            local_files_only=True
+        )
         logger.info("Модель загружена")
         
         # Преобразуем теги в описания для эмбеддингов
@@ -88,18 +94,33 @@ class LegalSemanticSearchEngine:
         
         # Предварительно вычисляем эмбеддинги корпуса для быстрого поиска
         self.tagged_corpus = []
+        tagged_corpus_path = self.cache_dir / "tagged_corpus.json"
+        
         if self.training_corpus:
-            logger.info("Тегирование обучающего корпуса...")
-            # Извлекаем тексты для эмбеддингов
-            texts = [article["content"] if isinstance(article, dict) else article for article in self.training_corpus]
-            self.tagged_corpus = self.assign_tags(texts, tags_per_article=self.tags_per_article)
-            
-            # Сохраняем оригинальные объекты статей
-            for i, article in enumerate(self.training_corpus):
-                self.tagged_corpus[i]["original_data"] = article
-            
-            # Вычисляем или загружаем эмбеддинги статей
-            self.article_embeddings = self._load_or_compute_embeddings("article_embeddings.npy", texts)
+            if tagged_corpus_path.exists():
+                logger.info(f"Загрузка тегированного корпуса из {tagged_corpus_path}...")
+                with open(tagged_corpus_path, 'r', encoding='utf-8') as f:
+                    self.tagged_corpus = json.load(f)
+                # Вычисляем или загружаем эмбеддинги статей
+                texts = [article["text"] for article in self.tagged_corpus]
+                self.article_embeddings = self._load_or_compute_embeddings("article_embeddings.npy", texts)
+            else:
+                logger.info("Тегирование обучающего корпуса...")
+                # Извлекаем тексты для эмбеддингов
+                texts = [article["content"] if isinstance(article, dict) else article for article in self.training_corpus]
+                self.tagged_corpus = self.assign_tags(texts, tags_per_article=self.tags_per_article)
+                
+                # Сохраняем оригинальные объекты статей
+                for i, article in enumerate(self.training_corpus):
+                    self.tagged_corpus[i]["original_data"] = article
+                
+                # Вычисляем или загружаем эмбеддинги статей
+                self.article_embeddings = self._load_or_compute_embeddings("article_embeddings.npy", texts)
+                
+                # Сохраняем тегированный корпус
+                with open(tagged_corpus_path, 'w', encoding='utf-8') as f:
+                    json.dump(self.tagged_corpus, f, ensure_ascii=False, indent=4)
+                logger.info(f"Тегированный корпус сохранен в {tagged_corpus_path}")
             
         # Вычисляем IDF веса
         self.idf_weights = self._compute_idf()
@@ -218,7 +239,14 @@ class LegalSemanticSearchEngine:
         return "\n".join(output)
 
 
-    def find_articles_by_new_sentence(self, new_sentence: str, k: int = 5) -> List[Dict[str, Any]]:
+    def find_articles_by_new_sentence(
+        self,
+        new_sentence: str,
+        k: int = 5,
+        similarity_weight: float = 0.4,
+        coverage_weight: float = 0.6,
+        penalty_factor: float = 0.5
+    ) -> List[Dict[str, Any]]:
         """
         Находит топ-k статей, вычисляя косинусное сходство между вектором тегов
         нового предложения и вектором тегов каждой статьи, учитывая только теги запроса.
@@ -226,6 +254,9 @@ class LegalSemanticSearchEngine:
         Args:
             new_sentence (str): Запрос пользователя.
             k (int): Количество возвращаемых статей.
+            similarity_weight (float): Вес косинусного сходства.
+            coverage_weight (float): Вес покрытия тегов.
+            penalty_factor (float): Коэффициент штрафа.
 
         Returns:
             List[Dict[str, Any]]: Список найденных статей с их оценками.
@@ -274,10 +305,11 @@ class LegalSemanticSearchEngine:
                 penalty = 0.5 * missing_tags_ratio
                 
                 # Итоговый score
-                score = (0.4 * similarity + 0.6 * coverage) - penalty
+                score = (similarity_weight * similarity + coverage_weight * coverage) - (penalty_factor * missing_tags_ratio)
                     
             results.append({
                 "article": article.get("original_data", {"content": article["text"]}),
+                "str": article.get("text"),
                 "score": float(score),
                 "query_tags": query_tags_rec,
                 "article_tags": article.get("tag_scores", {}),
