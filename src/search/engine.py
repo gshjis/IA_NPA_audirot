@@ -13,6 +13,22 @@ class LegalSemanticSearchEngine:
     Теги загружаются из внешнего JSON-файла.
     """
 
+    def _compute_idf(self) -> Dict[str, float]:
+        """
+        Вычисляет IDF для каждого тега на основе размеченного корпуса.
+        """
+        if not self.tagged_corpus:
+            return {tag: 1.0 for tag in self.tag_names}
+        
+        n_docs = len(self.tagged_corpus)
+        idf = {}
+        for tag in self.tag_names:
+            # Считаем, в скольких статьях встречается тег
+            df = sum(1 for article in self.tagged_corpus if tag in article.get("tags", []))
+            # Формула IDF: log(N / (df + 1)) + 1
+            idf[tag] = np.log(n_docs / (df + 1)) + 1
+        return idf
+
     def __init__(
         self, 
         tags_filepath="data/raw/base.json", 
@@ -79,6 +95,10 @@ class LegalSemanticSearchEngine:
             # Вычисляем или загружаем эмбеддинги статей
             self.article_embeddings = self._load_or_compute_embeddings("article_embeddings.npy", self.training_corpus)
             
+        # Вычисляем IDF веса
+        self.idf_weights = self._compute_idf()
+        logger.info("IDF веса вычислены")
+        
         logger.info("Инициализация завершена")
 
     def _load_or_compute_embeddings(self, filename: str, texts: List[str]) -> np.ndarray:
@@ -212,9 +232,9 @@ class LegalSemanticSearchEngine:
         # 1. Получаем теги и их релевантность для нового предложения
         query_tags_rec = self.get_tag_recommendations(new_sentence)
         
-        # Преобразуем в вектор (numpy), учитывая только теги из запроса
+        # Преобразуем в вектор (numpy), учитывая только теги из запроса и IDF веса
         query_tags = list(query_tags_rec.keys())
-        query_vector = np.array([query_tags_rec[tag] for tag in query_tags])
+        query_vector = np.array([query_tags_rec[tag] * self.idf_weights.get(tag, 1.0) for tag in query_tags])
         query_norm = np.linalg.norm(query_vector)
         
         if query_norm == 0:
@@ -226,32 +246,29 @@ class LegalSemanticSearchEngine:
         for i, article in enumerate(self.tagged_corpus):
             article_tags_rec = article.get("all_scores", {})
             
-            # Находим общие теги
-            query_tag_set = set(query_tags)
-            article_tag_set = set(article_tags_rec.keys())
-            common_tags = list(query_tag_set.intersection(article_tag_set))
+            # Векторы только по общим тегам (пересечение)
+            common_tags = [tag for tag in query_tags if tag in article_tags_rec]
             
             if not common_tags:
                 score = 0.0
             else:
-                # Векторы только по общим тегам
-                q_vec = np.array([query_tags_rec[tag] for tag in common_tags])
-                a_vec = np.array([article_tags_rec[tag] for tag in common_tags])
+                q_vec = np.array([query_tags_rec[tag] * self.idf_weights.get(tag, 1.0) for tag in common_tags])
+                a_vec = np.array([article_tags_rec[tag] * self.idf_weights.get(tag, 1.0) for tag in common_tags])
                 
                 q_norm = np.linalg.norm(q_vec)
                 a_norm = np.linalg.norm(a_vec)
                 
-                if q_norm == 0 or a_norm == 0:
-                    score = 0.0
-                else:
-                    score = np.dot(q_vec, a_vec) / (q_norm * a_norm)
-            
-            # Бонус за количество общих тегов и штраф за отсутствующие
-            bonus = 0.2 * len(common_tags)/self.tags_per_article
-            penalty = 0.2 * len(query_tag_set.difference(article_tag_set))/self.tags_per_article
-            
-            score = (score + bonus - penalty)
-            score = max(0.0, min(score, 1.0))
+                similarity = np.dot(q_vec, a_vec) / (q_norm * a_norm) if (q_norm > 0 and a_norm > 0) else 0.0
+                
+                # Покрытие запроса (доля веса запроса, покрытая статьей)
+                coverage = np.sum(a_vec) / np.sum([query_tags_rec[tag] * self.idf_weights.get(tag, 1.0) for tag in query_tags])
+                
+                # Штраф за непокрытые теги запроса
+                missing_tags_ratio = 1.0 - (len(common_tags) / len(query_tags))
+                penalty = 0.5 * missing_tags_ratio
+                
+                # Итоговый score
+                score = (0.4 * similarity + 0.6 * coverage) - penalty
                     
             results.append({
                 "text": article["text"],
