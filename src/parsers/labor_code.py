@@ -118,6 +118,7 @@ def parse_labor_code(file_path, output_json_path):
 
         # Создаем запись
         entry = {
+            "source": "Трудовой кодекс",
             "section": current_section_num,
             "chapter": current_chapter_num,
             "number": article_num_display,

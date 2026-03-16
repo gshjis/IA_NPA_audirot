@@ -48,9 +48,10 @@ def parse_constitution_to_json(text: str) -> List[Dict[str, Any]]:
         # Проверка на статью
         article_match = article_pattern.match(line)
         if article_match:
-            article_number = int(float(article_match.group(1)))
+            article_number = article_match.group(1).strip()
             
             current_article = {
+                "source": "Конституция",
                 "section": current_section,
                 "chapter": current_chapter,
                 "number": article_number,
