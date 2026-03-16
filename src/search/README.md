@@ -6,29 +6,51 @@
 
 ### 1. Векторизация текстов
 Тексты (статьи и описания тегов) преобразуются в векторы $\mathbf{v} \in \mathbb{R}^d$ с помощью модели `SentenceTransformer`. Векторы нормализуются по L2‑норме:
-$$ \mathbf{v}_{norm} = \frac{\mathbf{v}}{\|\mathbf{v}\|_2}, \quad \text{где } \|\mathbf{v}\|_2 = \sqrt{\sum_{i} v_i^2} $$
+
+$$
+\mathbf{v}_{norm} = \frac{\mathbf{v}}{\|\mathbf{v}\|_2}, \quad \text{где } \|\mathbf{v}\|_2 = \sqrt{\sum_{i} v_i^2}
+$$
+
 Нормализация гарантирует, что $\|\mathbf{v}_{norm}\|_2 = 1$, что упрощает вычисление косинусного сходства.
 
 ### 2. Косинусное сходство
 Сходство между двумя нормализованными векторами $\mathbf{a}$ и $\mathbf{b}$ равно их скалярному произведению:
-$$ \text{sim}(\mathbf{a}, \mathbf{b}) = \mathbf{a} \cdot \mathbf{b} = \sum_{i} a_i b_i \in [-1, 1] $$
+
+$$
+\text{sim}(\mathbf{a}, \mathbf{b}) = \mathbf{a} \cdot \mathbf{b} = \sum_{i} a_i b_i \in [-1, 1]
+$$
 
 ### 3. Inverse Document Frequency (IDF)
 Для учета информативности тегов вычисляется вес IDF на основе размеченного корпуса статей:
-$$ \text{idf}(t) = \log\left( \frac{N}{\text{df}(t) + 1} \right) + 1 $$
+
+$$
+\text{idf}(t) = \log\left( \frac{N}{\text{df}(t) + 1} \right) + 1
+$$
 
 ### 4. Присвоение тегов статье
 Для статьи $s$ вычисляется её эмбеддинг $\mathbf{e}_s$. Для каждого тега $t$ с эмбеддингом $\mathbf{e}_t$ определяется сходство:
-$$ \text{score}_{raw}(s, t) = \text{sim}(\mathbf{e}_s, \mathbf{e}_t) $$
+
+$$
+\text{score}_{raw}(s, t) = \text{sim}(\mathbf{e}_s, \mathbf{e}_t)
+$$
+
 Статье присваиваются `tags_per_article` тегов с наибольшими сходствами.
 
 ### 5. Ранжирование статей по запросу
 Запрос $q$ преобразуется в набор тегов с весами:
-$$ w_q(t) = \text{sim}(\mathbf{e}_q, \mathbf{e}_t) \cdot \text{idf}(t), \quad t \in T_q $$
+
+$$
+w_q(t) = \text{sim}(\mathbf{e}_q, \mathbf{e}_t) \cdot \text{idf}(t), \quad t \in T_q
+$$
+
 Для каждой статьи $s$ с известными тегами $T_s$ и их весами $w_s(t) = \text{score}_{raw}(s, t) \cdot \text{idf}(t)$ строится вектор по **общим тегам** $C = T_q \cap T_s$.
 
 Итоговая оценка статьи:
-$$ \text{score}(s, q) = (0.4 \cdot \text{sim}_C + 0.6 \cdot \text{cov}) - \text{penalty} $$
+
+$$
+\text{score}(s, q) = (0.4 \cdot \text{sim}_C + 0.6 \cdot \text{cov}) - \text{penalty}
+$$
+
 где $\text{sim}_C$ — косинусное сходство векторов общих тегов, $\text{cov}$ — покрытие запроса, $\text{penalty}$ — штраф за непокрытые теги.
 
 ## Основные возможности
