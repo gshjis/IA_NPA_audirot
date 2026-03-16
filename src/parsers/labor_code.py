@@ -1,5 +1,7 @@
 import re
 import json
+from src.logger import logger
+from src.logger import logger
 import os
 
 def parse_labor_code(file_path, output_json_path):
@@ -13,11 +15,12 @@ def parse_labor_code(file_path, output_json_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             text = f.read()
+        logger.info(f"Файл {file_path} успешно прочитан")
     except FileNotFoundError:
-        print(f"Ошибка: Файл не найден по пути {file_path}")
+        logger.error(f"Ошибка: Файл не найден по пути {file_path}")
         return
     except Exception as e:
-        print(f"Ошибка при чтении файла: {e}")
+        logger.error(f"Ошибка при чтении файла: {e}")
         return
 
     # Регулярное выражение для поиска статей.

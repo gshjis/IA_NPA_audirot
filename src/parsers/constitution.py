@@ -1,5 +1,7 @@
 import re
 import json
+from src.logger import logger
+from src.logger import logger
 from typing import List, Dict, Any
 
 def parse_constitution_to_json(text: str) -> List[Dict[str, Any]]:
@@ -7,6 +9,7 @@ def parse_constitution_to_json(text: str) -> List[Dict[str, Any]]:
     Парсит текст конституции в список словарей (статей),
     группируя их по разделам и главам.
     """
+    logger.info("Начало парсинга текста Конституции")
     # Регулярные выражения
     section_pattern = re.compile(r'^РАЗДЕЛ\s+([IVXLCDM]+)', re.IGNORECASE)
     chapter_pattern = re.compile(r'^ГЛАВА\s+(\d+)', re.IGNORECASE)
@@ -75,6 +78,7 @@ def parse_constitution_to_json(text: str) -> List[Dict[str, Any]]:
         content = re.sub(r'\s+', ' ', content).strip()
         article["content"] = content
             
+    logger.info(f"Парсинг завершен, найдено {len(data)} статей")
     return data
 
 
