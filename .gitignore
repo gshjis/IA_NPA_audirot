@@ -56,3 +56,11 @@ htmlcov/
 
 # Data
 documents
+
+# Local backend examples
+backend/examples/documents/
+
+# Backend runtime artifacts
+backend/database/*.db
+backend/storage/
+backend/logs/
