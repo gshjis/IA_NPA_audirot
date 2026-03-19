@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 
 RiskLevel = Literal["green", "yellow", "red"]
+RelationType = Literal["conflict", "consistent", "unclear"]
+AssessmentSource = Literal["llm", "heuristic"]
 AnalysisStatus = Literal["pending", "running", "completed", "failed"]
 
 
@@ -40,11 +42,15 @@ class AnalysisResultItem(BaseModel):
     new: str
     similarity: float
     semantic_method: str
+    relation: RelationType = "unclear"
     conflict: bool
     risk: RiskLevel
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     law: str
     law_article: str
+    evidence: str = ""
     explanation: str
+    assessment_source: AssessmentSource = "heuristic"
     laws: list[LawMatch] = Field(default_factory=list)
 
 

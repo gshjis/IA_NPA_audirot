@@ -126,11 +126,15 @@ curl "http://127.0.0.1:8001/analysis/ANALYSIS_ID"
     "new": "Новая редакция...",
     "similarity": 0.71,
     "semantic_method": "sentence-transformers",
+    "relation": "conflict",
     "conflict": true,
     "risk": "red",
+    "confidence": 0.91,
     "law": "Трудовой кодекс",
     "law_article": "Статья 21",
+    "evidence": "Работник имеет право на условия труда, соответствующие требованиям законодательства.",
     "explanation": "Новое условие может противоречить действующим нормам.",
+    "assessment_source": "llm",
     "laws": [
       {
         "law_name": "Трудовой кодекс",
