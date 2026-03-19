@@ -22,6 +22,8 @@ httpx = "^0.28.1"
 python-multipart = "^0.0.20"
 pdfplumber = "^0.11.5"
 python-docx = "^1.1.2"
+rank-bm25 = "^0.2.2"
+logger = "^1.4"
 
 [tool.poetry.group.dev.dependencies]
 
