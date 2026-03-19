@@ -54,7 +54,7 @@ set +a
 Доступные переменные:
 
 ```bash
-export BACKEND_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/npa_analysis"
+export BACKEND_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5433/npa_analysis"
 export BACKEND_CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
 export COMETAPI_API_KEY="your-cometapi-key"
 export COMETAPI_BASE_URL="https://openrouter.ai/api/v1"
@@ -80,6 +80,49 @@ docker compose up --build
 - Backend OpenAPI JSON: `http://127.0.0.1:8001/openapi.json`
 - Retrieval Swagger: `http://127.0.0.1:8000/docs`
 - Retrieval OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
+
+## Режим локальной разработки
+
+Если PostgreSQL нужен в Docker, а backend и retrieval хочется запускать локально командами:
+
+1. Подними только Postgres:
+
+```bash
+docker compose up -d postgres
+```
+
+2. Установи зависимости локально:
+
+```bash
+poetry install
+```
+
+3. В первом терминале запусти retrieval:
+
+```bash
+cd /mnt/data/IA_NPA_audirot
+set -a
+source .env
+set +a
+poetry run uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+4. Во втором терминале запусти backend:
+
+```bash
+cd /mnt/data/IA_NPA_audirot
+set -a
+source .env
+set +a
+poetry run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8001
+```
+
+5. Проверь доступность:
+
+```bash
+curl http://127.0.0.1:8001/health
+curl http://127.0.0.1:8000/health
+```
 
 ## API
 
