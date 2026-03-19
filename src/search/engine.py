@@ -403,9 +403,38 @@ class LegalSemanticSearchEngine:
                 "bm25_score": float(bm25_scores[i]) if self.use_bm25 else 0.0
             })
         
-        # Сортируем и возвращаем топ-k
+        # Сортируем и берем кандидатов для переранжирования
         results.sort(key=lambda x: x["score"], reverse=True)
-        return results[:k]
+        candidates = results[:k * 5]
+        
+        # Переранжирование
+        reranked = []
+        tokenized_query = query.split()
+        for res in candidates:
+            # 1. BM25 (уже есть)
+            # 2. Точное совпадение (премия)
+            exact_match = 1.0 if query.lower() in res["text"].lower() else 0.0
+            
+            # 3. Позиция тегов (штраф, если теги глубоко)
+            # Средняя позиция тегов в статье
+            avg_pos = np.mean(list(res.get("tag_positions", {}).values())) if res.get("tag_positions") else 100
+            position_bonus = 1.0 / (1.0 + np.log1p(avg_pos))
+            
+            # 4. Длина текста (премия)
+            length_bonus = np.log1p(res.get("full_text_length", 0)) / 10.0
+            
+            # Формула переранживания
+            rerank_score = (0.4 * res["score"] +
+                            0.3 * res["bm25_score"] +
+                            0.2 * exact_match +
+                            0.1 * position_bonus +
+                            0.05 * length_bonus)
+            
+            res["score"] = float(rerank_score)
+            reranked.append(res)
+            
+        reranked.sort(key=lambda x: x["score"], reverse=True)
+        return reranked[:k]
     
     def search_by_tags(self, query_tags: List[str], k: int = 10) -> List[Dict[str, Any]]:
         """
@@ -463,7 +492,9 @@ if __name__ == "__main__":
     )
     
     # Поиск
-    query = "кредитор не имеет преимущественного права удовлетворение из стоимости заложенного имущества"
+    query = """Часть первую статьи 201 дополнить:
+"Банк обязан осуществлять операции по текущему (расчетному) банковскому счету в течение одного банковского дня. При нарушении указанного срока банк уплачивает клиенту пеню в размере 0,1 процента от суммы операции за каждый день просрочки."
+это что-то нарушает?"""
     results = searcher.search(query, k=50)
     
     print(f"\n🔍 Запрос: '{query}'")
