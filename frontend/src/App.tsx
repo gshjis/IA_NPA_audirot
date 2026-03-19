@@ -1,5 +1,13 @@
+import { Hero } from "./ui/Hero";
+import { InfoSection } from "./ui/InfoSection";
+
 function App() {
-  return <></>;
+  return (
+    <>
+      <Hero />
+      <InfoSection/>
+    </>
+  );
 }
 
 export default App;
