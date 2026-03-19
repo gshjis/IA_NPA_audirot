@@ -12,6 +12,7 @@ __pycache__/
 venv/
 env/
 .venv/
+.venv_clean/
 
 # IDE
 .vscode/
@@ -56,3 +57,13 @@ htmlcov/
 
 # Data
 documents
+
+# Local backend examples
+backend/examples/documents/
+
+# Backend runtime artifacts
+backend/database/*.db
+backend/storage/
+backend/logs/
+*.npy
+*.json
