@@ -1,335 +1,510 @@
+import sys
+import os
 import numpy as np
 import hashlib
 import json
 from pathlib import Path
+
+# Добавляем корень проекта в sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Dict, Any, Optional
+from rank_bm25 import BM25Okapi
+from tqdm import tqdm
+from typing import List, Dict, Any, Optional, Tuple
 from src.logger import logger
 from src.loader import load_json
 
 class LegalSemanticSearchEngine:
     """
-    Класс для присвоения научно обоснованных тегов статьям Конституции.
-    Теги загружаются из внешнего JSON-файла.
+    Оптимизированный движок для юридического семантического поиска.
+    
+    Особенности:
+    - Кэширование эмбеддингов тегов и статей
+    - Гибридный поиск (семантика + BM25 + IDF)
+    - Настраиваемое количество тегов
+    - Поддержка категорий тегов
     """
-
-    def _compute_idf(self) -> Dict[str, float]:
-        """
-        Вычисляет IDF для каждого тега на основе размеченного корпуса.
-        """
-        if not self.tagged_corpus:
-            return {tag: 1.0 for tag in self.tag_names}
-        
-        n_docs = len(self.tagged_corpus)
-        idf = {}
-        for tag in self.tag_names:
-            # Считаем, в скольких статьях встречается тег
-            df = sum(1 for article in self.tagged_corpus if tag in article.get("tags", []))
-            # Формула IDF: log(N / (df + 1)) + 1
-            idf[tag] = np.log(n_docs / (df + 1)) + 1
-        return idf
-
+    
     def __init__(
         self,
-        tags_filepath="data/raw/base.json",
-        model_name='deepvk/USER2-base',
-        training_corpus=None,
-        cache_dir="scripts/data/cache",
-        tags_per_article:int = 50,
-        similarity_weight: float = 0.4,
-        coverage_weight: float = 0.6,
-        penalty_factor: float = 0.5
+        tags_filepath: str = "data/raw/base.json",
+        laws_filepath: str = "data/processed/laws.json",
+        model_name: str = 'DeepPavlov/rubert-base-cased-sentence',
+        cache_dir: str = "data/processed/cache/engine",
+        tags_per_article: int = 400,
+        similarity_weight: float = 0.7,
+        use_bm25: bool = True,
+        force_recompute: bool = False
     ):
-        self.similarity_weight = similarity_weight
-        self.coverage_weight = coverage_weight
-        self.penalty_factor = penalty_factor
         """
-        Инициализация движка поиска.
-
+        Инициализация поискового движка.
+        
         Args:
-            tags_filepath (str): Путь к JSON-файлу с тегами.
-            model_name (str): Название модели SentenceTransformer.
-            training_corpus (List[str], optional): Список статей для обучения.
-            article_weights (Dict[int, float], optional): Веса статей для ранжирования.
-            noisy_articles (List[int], optional): Список индексов статей, которые нужно игнорировать.
-            cache_dir (str): Директория для кэширования моделей и эмбеддингов.
-            threshold (float): Порог отсечения для тегов.
+            tags_filepath: путь к JSON с тегами (категория -> список тегов)
+            laws_filepath: путь к JSON с законами/статьями
+            model_name: название sentence-transformer модели
+            cache_dir: директория для кэширования
+            tags_per_article: сколько тегов присваивать статье
+            similarity_weight: вес семантики (1 - вес BM25)
+            use_bm25: использовать ли BM25
+            force_recompute: пересчитать всё заново
         """
         self.tags_per_article = tags_per_article
+        self.similarity_weight = similarity_weight
+        self.use_bm25 = use_bm25
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
-        # Загружаем теги из JSON
+        # 1. Загружаем теги
+        self._load_tags(tags_filepath)
+        
+        # 2. Загружаем модель
+        self._load_model(model_name, force_recompute)
+        
+        # 3. Загружаем или вычисляем эмбеддинги тегов
+        self._load_or_compute_tag_embeddings(force_recompute)
+        
+        # 4. Загружаем законы
+        self._load_laws(laws_filepath)
+        
+        # 5. Загружаем или вычисляем эмбеддинги статей и теги
+        self._load_or_compute_article_data(force_recompute)
+        
+        # 6. Инициализируем BM25
+        if self.use_bm25 and self.articles_texts:
+            self._init_bm25()
+        
+        # 7. Вычисляем IDF веса
+        self._compute_idf()
+        
+        logger.info("✅ LegalSemanticSearchEngine инициализирован")
+    
+    def _load_tags(self, tags_filepath: str):
+        """Загрузка тегов из JSON."""
         try:
-            self.tag_keywords = load_json(tags_filepath)
-            logger.info(f"Загружено {len(self.tag_keywords)} тегов из {tags_filepath}")
+            self.raw_tags = load_json(tags_filepath)
+            logger.info(f"📚 Загружено {len(self.raw_tags)} категорий тегов")
+            
+            # Преобразуем в плоский список для эмбеддингов
+            self.tag_names = []
+            self.tag_to_category = {}
+            
+            for category, tags in self.raw_tags.items():
+                for tag in tags:
+                    self.tag_names.append(tag)
+                    self.tag_to_category[tag] = category
+            
+            logger.info(f"🏷️ Всего тегов: {len(self.tag_names)}")
+            
         except Exception as e:
-            logger.error(f"Ошибка загрузки тегов из {tags_filepath}: {e}")
-            self.tag_keywords = {}
-        self.training_corpus = training_corpus or []
+            logger.error(f"❌ Ошибка загрузки тегов: {e}")
+            raise
+    
+    def _load_model(self, model_name: str, force_recompute: bool):
+        """Загрузка sentence-transformer модели."""
+        model_path = self.cache_dir / "model_loaded.flag"
         
-        if not self.tag_keywords:
-            logger.error(f"Не удалось загрузить теги из {tags_filepath}")
-            raise ValueError(f"Не удалось загрузить теги из {tags_filepath}")
-        
-        # Загружаем модель (локально)
-        logger.info(f"Загрузка модели {model_name}...")
+        if model_path.exists() and not force_recompute:
+            logger.info(f"🔄 Модель {model_name} уже загружена, используем кэш")
+        else:
+            logger.info(f"📥 Загрузка модели {model_name}...")
         
         self.model = SentenceTransformer(
             model_name,
-            cache_folder=str(self.cache_dir / "models"),
-            local_files_only=True
+            cache_folder=str(self.cache_dir)
         )
-        logger.info("Модель загружена")
         
-        # Преобразуем теги в описания для эмбеддингов
-        self.tag_names = list(self.tag_keywords.keys())
-        self.tag_descriptions = [". ".join(self.tag_keywords[tag]) for tag in self.tag_names]
-        
-        logger.info(f"Создано {len(self.tag_descriptions)} описаний тегов")
-        
-        # Вычисляем или загружаем эмбеддинги для тегов
-        self.tag_embeddings = self._load_or_compute_embeddings("tag_embeddings.npy", self.tag_descriptions)
-        
-        # Предварительно вычисляем эмбеддинги корпуса для быстрого поиска
-        self.tagged_corpus = []
-        tagged_corpus_path = self.cache_dir / "tagged_corpus.json"
-        
-        if self.training_corpus:
-            if tagged_corpus_path.exists():
-                logger.info(f"Загрузка тегированного корпуса из {tagged_corpus_path}...")
-                with open(tagged_corpus_path, 'r', encoding='utf-8') as f:
-                    self.tagged_corpus = json.load(f)
-                # Вычисляем или загружаем эмбеддинги статей
-                texts = [article["text"] for article in self.tagged_corpus]
-                self.article_embeddings = self._load_or_compute_embeddings("article_embeddings.npy", texts)
-            else:
-                logger.info("Тегирование обучающего корпуса...")
-                # Извлекаем тексты для эмбеддингов
-                texts = [article["content"] if isinstance(article, dict) else article for article in self.training_corpus]
-                self.tagged_corpus = self.assign_tags(texts, tags_per_article=self.tags_per_article)
-                
-                # Сохраняем оригинальные объекты статей
-                for i, article in enumerate(self.training_corpus):
-                    self.tagged_corpus[i]["original_data"] = article
-                
-                # Вычисляем или загружаем эмбеддинги статей
-                self.article_embeddings = self._load_or_compute_embeddings("article_embeddings.npy", texts)
-                
-                # Сохраняем тегированный корпус
-                with open(tagged_corpus_path, 'w', encoding='utf-8') as f:
-                    json.dump(self.tagged_corpus, f, ensure_ascii=False, indent=4)
-                logger.info(f"Тегированный корпус сохранен в {tagged_corpus_path}")
-            
-        # Вычисляем IDF веса
-        self.idf_weights = self._compute_idf()
-        logger.info("IDF веса вычислены")
-        
-        logger.info("Инициализация завершена")
-
-    def _load_or_compute_embeddings(self, filename: str, texts: List[str]) -> np.ndarray:
-        """
-        Загружает эмбеддинги из кэша или вычисляет их, если кэш отсутствует.
-
-        Args:
-            filename (str): Имя файла кэша.
-            texts (List[str]): Список текстов для эмбеддинга.
-
-        Returns:
-            np.ndarray: Массив эмбеддингов.
-        """
-        path = self.cache_dir / filename
-        if path.exists():
-            logger.info(f"Загрузка эмбеддингов из {path}...")
-            return np.load(path)
-        else:
-            logger.info(f"Вычисление эмбеддингов и сохранение в {path}...")
-            embeddings = self.model.encode(texts, normalize_embeddings=True)
-            np.save(path, embeddings)
-            return embeddings
+        # Создаём флаг, что модель загружена
+        model_path.touch()
+        logger.info("✅ Модель загружена")
     
-    def assign_tags(self, articles_list: List[str], tags_per_article: int) -> List[Dict[str, Any]]:
-        """
-        Присваивает теги статьям на основе семантической близости.
-
-        Args:
-            articles_list (List[str]): Список текстов статей.
-            tags_per_article (int): Максимальное количество тегов на статью.
-
-        Returns:
-            List[Dict[str, Any]]: Список словарей с информацией о тегах для каждой статьи.
-        """
-        logger.info(f"Вычисление эмбеддингов для {len(articles_list)} статей...")
-        article_embeddings = self.model.encode(articles_list, normalize_embeddings=True)
+    def _load_or_compute_tag_embeddings(self, force_recompute: bool):
+        """Загрузка или вычисление эмбеддингов тегов."""
+        tag_emb_path = self.cache_dir / "tag_embeddings.npy"
+        tag_names_path = self.cache_dir / "tag_names.json"
         
-        logger.info("Вычисление схожести с тегами...")
-        similarities = cosine_similarity(article_embeddings, self.tag_embeddings)
+        if tag_emb_path.exists() and tag_names_path.exists() and not force_recompute:
+            logger.info(f"📂 Загрузка эмбеддингов тегов из кэша...")
+            self.tag_embeddings = np.load(tag_emb_path)
+            with open(tag_names_path, 'r', encoding='utf-8') as f:
+                cached_names = json.load(f)
+            
+            # Проверяем, что теги не изменились
+            if cached_names == self.tag_names:
+                logger.info(f"✅ Эмбеддинги тегов загружены ({len(self.tag_embeddings)} шт.)")
+                return
+            else:
+                logger.warning("⚠️ Теги изменились, пересчитываем эмбеддинги...")
         
-        tagged_articles = []
+        # Вычисляем эмбеддинги
+        logger.info(f"🧮 Вычисление эмбеддингов для {len(self.tag_names)} тегов...")
+        self.tag_embeddings = self.model.encode(
+            self.tag_names,
+            normalize_embeddings=True,
+            show_progress_bar=True,
+            batch_size=64
+        )
         
-        for i, article_text in enumerate(articles_list):
+        # Сохраняем
+        np.save(tag_emb_path, self.tag_embeddings)
+        with open(tag_names_path, 'w', encoding='utf-8') as f:
+            json.dump(self.tag_names, f, ensure_ascii=False)
+        
+        logger.info(f"✅ Эмбеддинги тегов сохранены в {tag_emb_path}")
+    
+    def _load_laws(self, laws_filepath: str):
+        """Загрузка законов."""
+        self.laws_path = Path(laws_filepath)
+        if not self.laws_path.exists():
+            logger.error(f"❌ Файл законов не найден: {laws_filepath}")
+            raise FileNotFoundError(f"Laws file not found: {laws_filepath}")
+        
+        with open(self.laws_path, 'r', encoding='utf-8') as f:
+            self.laws_data = json.load(f)
+        
+        logger.info(f"📜 Загружено {len(self.laws_data)} статей/законов")
+        
+        # Извлекаем тексты
+        self.articles_texts = []
+        self.articles_meta = []
+        
+        for item in self.laws_data:
+            if isinstance(item, dict):
+                text = item.get("content") or item.get("text", "")
+                self.articles_texts.append(text)
+                self.articles_meta.append({
+                    "source": item.get("source", "unknown"),
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "original": item
+                })
+            else:
+                self.articles_texts.append(str(item))
+                self.articles_meta.append({"source": "unknown", "original": item})
+    
+    def _load_or_compute_article_data(self, force_recompute: bool):
+        """Загрузка или вычисление эмбеддингов статей и тегов."""
+        articles_emb_path = self.cache_dir / "article_embeddings.npy"
+        tagged_path = self.cache_dir / "tagged_articles.json"
+        
+        # Проверяем, всё ли есть в кэше
+        cache_valid = (
+            articles_emb_path.exists() and 
+            tagged_path.exists() and 
+            not force_recompute
+        )
+        
+        if cache_valid:
+            logger.info(f"📂 Загрузка данных статей из кэша...")
+            
+            # Загружаем эмбеддинги
+            self.article_embeddings = np.load(articles_emb_path)
+            
+            # Загружаем тегированные статьи
+            with open(tagged_path, 'r', encoding='utf-8') as f:
+                self.tagged_articles = json.load(f)
+            
+            logger.info(f"✅ Загружено {len(self.tagged_articles)} тегированных статей")
+            logger.info(f"✅ Эмбеддинги статей: {self.article_embeddings.shape}")
+            
+        else:
+            # Вычисляем с нуля
+            self._compute_article_data()
+            
+            # Сохраняем
+            np.save(articles_emb_path, self.article_embeddings)
+            with open(tagged_path, 'w', encoding='utf-8') as f:
+                # Без indent для скорости
+                json.dump(self.tagged_articles, f, ensure_ascii=False)
+            
+            logger.info(f"✅ Данные статей сохранены в кэш")
+    
+    def _compute_article_data(self):
+        """Вычисление эмбеддингов статей и присвоение тегов."""
+        logger.info(f"🧮 Вычисление эмбеддингов для {len(self.articles_texts)} статей...")
+        
+        # Вычисляем эмбеддинги статей
+        self.article_embeddings = self.model.encode(
+            self.articles_texts,
+            normalize_embeddings=True,
+            show_progress_bar=True,
+            batch_size=32
+        )
+        
+        logger.info(f"✅ Эмбеддинги статей вычислены: {self.article_embeddings.shape}")
+        
+        # Вычисляем схожесть с тегами
+        logger.info(f"🔄 Вычисление схожести статей с тегами...")
+        similarities = cosine_similarity(self.article_embeddings, self.tag_embeddings)
+        
+        # Для каждой статьи выбираем топ тегов
+        self.tagged_articles = []
+        
+        for i, text in enumerate(tqdm(self.articles_texts, desc="Присвоение тегов")):
             sim_scores = similarities[i]
-            top_indices = np.argsort(sim_scores)[::-1][:tags_per_article]
-            
-            article_tags = []
+            top_indices = np.argsort(sim_scores)[::-1][:self.tags_per_article]
+            tags = []
             tag_scores = {}
+            tag_positions = {}
             
-            for idx in top_indices:
-                tag_name = self.tag_names[idx]
+            for position, idx in enumerate(top_indices):
+                tag = self.tag_names[idx]
                 score = float(sim_scores[idx])
-                article_tags.append(tag_name)
-                tag_scores[tag_name] = score
+                tags.append(tag)
+                tag_scores[tag] = score
+                tag_positions[tag] = position
             
-            tagged_articles.append({
-                "text": article_text,
-                "tags": article_tags,
+            self.tagged_articles.append({
+                "text": text[:500] + "..." if len(text) > 500 else text,  # укорачиваем для хранения
+                "full_text_length": len(text),
+                "tags": tags,
                 "tag_scores": tag_scores,
-                "all_scores": {
-                    self.tag_names[idx]: float(sim_scores[idx])
-                    for idx in top_indices
-                }
+                "tag_positions": tag_positions,
+                "meta": self.articles_meta[i]
             })
         
-        return tagged_articles
+        logger.info(f"✅ Теги присвоены всем статьям")
     
-    def get_tag_recommendations(self, text: str) -> Dict[str, float]:
+    def _init_bm25(self):
+        """Инициализация BM25."""
+        logger.info(f"🔧 Инициализация BM25...")
+        tokenized_corpus = [text.split() for text in self.articles_texts]
+        self.bm25 = BM25Okapi(tokenized_corpus)
+        logger.info(f"✅ BM25 готов")
+    
+    def _compute_idf(self):
+        """Вычисление IDF весов для тегов."""
+        if not self.tagged_articles:
+            self.idf_weights = {tag: 1.0 for tag in self.tag_names}
+            return
+        
+        n_docs = len(self.tagged_articles)
+        df_counts = {tag: 0 for tag in self.tag_names}
+        
+        for article in self.tagged_articles:
+            for tag in article.get("tags", []):
+                if tag in df_counts:
+                    df_counts[tag] += 1
+        
+        # IDF = log(N / (df + 1)) + 1 (сглаживание)
+        self.idf_weights = {
+            tag: np.log(n_docs / (df + 1)) + 1 
+            for tag, df in df_counts.items()
+        }
+        
+        logger.info(f"📊 IDF веса вычислены (редкие теги: {sum(df == 0 for df in df_counts.values())} шт.)")
+    
+    def get_tag_recommendations(self, text: str, k: Optional[int] = None) -> List[Tuple[str, float]]:
         """
-        Получает рекомендации тегов для одного текста.
-
+        Получает рекомендации тегов для текста.
+        
         Args:
-            text (str): Входной текст.
-
+            text: входной текст
+            k: количество тегов (если None, используется self.tags_per_article)
+        
         Returns:
-            Dict[str, float]: Словарь {тег: оценка_релевантности}, ограниченный self.tags_per_article.
+            список кортежей (тег, оценка)
         """
-        logger.info(f"Получение рекомендаций тегов для текста длиной {len(text)}...")
+        if not text or not text.strip():
+            return []
+            
+        k = k or self.tags_per_article
+        
         text_embedding = self.model.encode([text], normalize_embeddings=True)
         similarities = cosine_similarity(text_embedding, self.tag_embeddings)[0]
         
-        # Получаем индексы топ-N тегов
-        top_indices = np.argsort(similarities)[::-1][:self.tags_per_article]
+        top_indices = np.argsort(similarities)[::-1][:k]
         
-        recommendations = {}
-        for i in top_indices:
-            recommendations[self.tag_names[i]] = float(similarities[i])
-        
-        logger.info(f"Найдено {len(recommendations)} тегов")
-        return dict(sorted(recommendations.items(), key=lambda x: x[1], reverse=True))
-
-    def get_tag_recommendations_formatted(self, text: str) -> str:
-        """
-        Получает рекомендации тегов и возвращает их в виде отформатированной строки.
-
-        Args:
-            text (str): Входной текст.
-
-        Returns:
-            str: Отформатированная строка с тегами.
-        """
-        tags = self.get_tag_recommendations(text)
-        if not tags:
-            return "Теги не найдены."
-            
-        output = [f"\n🔍 ТЕГИ ДЛЯ ЗАПРОСА: '{text}'", "-" * 40]
-        for tag, score in sorted(tags.items(), key=lambda x: x[1], reverse=True):
-            bar = "█" * int(score * 20) + "░" * (20 - int(score * 20))
-            output.append(f"   {tag:30} [{bar}] {score:.3f}")
-        output.append("-" * 40)
-        return "\n".join(output)
-
-
-    def find_articles_by_new_sentence(
+        return [(self.tag_names[i], float(similarities[i])) for i in top_indices]
+    
+    def search(
         self,
-        new_sentence: str,
-        k: int = 5,
-        similarity_weight: float = 0.4,
-        coverage_weight: float = 0.6,
-        penalty_factor: float = 0.5
+        query: str,
+        k: int = 10,
+        semantic_weight: Optional[float] = None
     ) -> List[Dict[str, Any]]:
         """
-        Находит топ-k статей, вычисляя косинусное сходство между вектором тегов
-        нового предложения и вектором тегов каждой статьи, учитывая только теги запроса.
-
+        Поиск релевантных статей по запросу.
+        
         Args:
-            new_sentence (str): Запрос пользователя.
-            k (int): Количество возвращаемых статей.
-            similarity_weight (float): Вес косинусного сходства.
-            coverage_weight (float): Вес покрытия тегов.
-            penalty_factor (float): Коэффициент штрафа.
-
+            query: поисковый запрос
+            k: количество результатов
+            semantic_weight: вес семантики (если None, используется self.similarity_weight)
+        
         Returns:
-            List[Dict[str, Any]]: Список найденных статей с их оценками.
+            список статей с оценками
         """
-        logger.info(f"Поиск статей для запроса: '{new_sentence[:50]}...'")
-        if not self.tagged_corpus:
-            logger.warning("Обучающий корпус пуст, поиск невозможен")
-            return []
-            
-        # 1. Получаем теги и их релевантность для нового предложения
-        query_tags_rec = self.get_tag_recommendations(new_sentence)
-        
-        # Преобразуем в вектор (numpy), учитывая только теги из запроса и IDF веса
-        query_tags = list(query_tags_rec.keys())
-        query_vector = np.array([query_tags_rec[tag] * self.idf_weights.get(tag, 1.0) for tag in query_tags])
-        query_norm = np.linalg.norm(query_vector)
-        
-        if query_norm == 0:
-            logger.warning("Вектор запроса пуст")
+        if not self.tagged_articles:
             return []
         
-        # 2. Вычисляем косинусное сходство для каждой статьи
+        if not query or not query.strip():
+            return []
+        
+        weight = semantic_weight if semantic_weight is not None else self.similarity_weight
+        
+        # 1. Получаем теги запроса с весами
+        query_tags = self.get_tag_recommendations(query, k=self.tags_per_article * 2)
+        
+        # Применяем IDF веса и позиционный вес к оценкам тегов запроса
+        # Вариант В: (1/sqrt(pos_query+1)) * (score * idf)
+        query_tag_dict = {
+            tag: (score * self.idf_weights.get(tag, 1.0)) / np.sqrt(pos + 1)
+            for pos, (tag, score) in enumerate(query_tags)
+        }
+        
+        # 2. BM25 scores
+        if self.use_bm25:
+            tokenized_query = query.split()
+            bm25_scores = self.bm25.get_scores(tokenized_query)
+            if np.max(bm25_scores) > 0:
+                # Min-Max нормализация для стабильности
+                bm25_scores = (bm25_scores - np.min(bm25_scores)) / (np.max(bm25_scores) - np.min(bm25_scores) + 1e-9)
+        else:
+            bm25_scores = np.zeros(len(self.tagged_articles))
+        
+        # 3. Комбинируем
         results = []
-        for i, article in enumerate(self.tagged_corpus):
-            article_tags_rec = article.get("all_scores", {})
+        for i, article in enumerate(self.tagged_articles):
+            article_tags = article.get("tag_scores", {})
+            article_tag_positions = article.get("tag_positions", {})
             
-            # Векторы только по общим тегам (пересечение)
-            common_tags = [tag for tag in query_tags if tag in article_tags_rec]
-            
-            if not common_tags:
-                score = 0.0
+            # Семантическая оценка через теги (косинусное сходство + штраф)
+            common_tags = set(query_tag_dict.keys()) & set(article_tags.keys())
+            if common_tags:
+                vec_q = np.array([query_tag_dict[t] for t in common_tags])
+                vec_a = np.array([article_tags[t] for t in common_tags])
+                
+                # Косинусное сходство
+                norm_q = np.linalg.norm(vec_q)
+                norm_a = np.linalg.norm(vec_a)
+                if norm_q > 0 and norm_a > 0:
+                    cosine_sim = np.dot(vec_q, vec_a) / (norm_q * norm_a)
+                else:
+                    cosine_sim = 0.0
+                
+                # Штраф за размер пересечения
+                fullness_coeff = len(common_tags) / self.tags_per_article
+                semantic_score = cosine_sim * fullness_coeff
             else:
-                q_vec = np.array([query_tags_rec[tag] * self.idf_weights.get(tag, 1.0) for tag in common_tags])
-                a_vec = np.array([article_tags_rec[tag] * self.idf_weights.get(tag, 1.0) for tag in common_tags])
-                
-                q_norm = np.linalg.norm(q_vec)
-                a_norm = np.linalg.norm(a_vec)
-                
-                similarity = np.dot(q_vec, a_vec) / (q_norm * a_norm) if (q_norm > 0 and a_norm > 0) else 0.0
-                
-                # Покрытие запроса (доля веса запроса, покрытая статьей)
-                coverage = np.sum(a_vec) / np.sum([query_tags_rec[tag] * self.idf_weights.get(tag, 1.0) for tag in query_tags])
-                
-                # Штраф за непокрытые теги запроса
-                missing_tags_ratio = 1.0 - (len(common_tags) / len(query_tags))
-                penalty = 0.5 * missing_tags_ratio
-                
-                # Итоговый score
-                score = (similarity_weight * similarity + coverage_weight * coverage) - (penalty_factor * missing_tags_ratio)
-                    
-            results.append({
-                "article": article.get("original_data", {"content": article["text"]}),
-                "str": article.get("text"),
-                "score": float(score),
-                "query_tags": query_tags_rec,
-                "article_tags": article.get("tag_scores", {}),
-                "common_tags": common_tags
-            })
+                semantic_score = 0.0
             
-        # 3. Сортируем и применяем базовый diversity
+            # Комбинированная оценка
+            combined_score = weight * semantic_score + (1 - weight) * bm25_scores[i]
+            
+            results.append({
+                "text": article.get("text", ""),
+                "full_text_length": article.get("full_text_length", 0),
+                "tags": article.get("tags", []),
+                "tag_scores": article.get("tag_scores", {}),
+                "meta": article.get("meta", {}),
+                "score": float(combined_score),
+                "semantic_score": float(semantic_score),
+                "bm25_score": float(bm25_scores[i]) if self.use_bm25 else 0.0
+            })
+        
+        # Сортируем и берем кандидатов для переранжирования
         results.sort(key=lambda x: x["score"], reverse=True)
+        candidates = results[:k * 5]
         
-        final_results = []
-        seen_texts = set()
-        for res in results:
-            # Используем контент статьи для дедупликации
-            article = res["article"]
-            article_content = article.get("content", str(article)) if isinstance(article, dict) else str(article)
-            if article_content not in seen_texts:
-                final_results.append(res)
-                seen_texts.add(article_content)
-            if len(final_results) >= k:
-                break
+        # Переранжирование
+        reranked = []
+        tokenized_query = query.split()
+        for res in candidates:
+            # 1. BM25 (уже есть)
+            # 2. Точное совпадение (премия)
+            exact_match = 1.0 if query.lower() in res["text"].lower() else 0.0
+            
+            # 3. Позиция тегов (штраф, если теги глубоко)
+            # Средняя позиция тегов в статье
+            avg_pos = np.mean(list(res.get("tag_positions", {}).values())) if res.get("tag_positions") else 100
+            position_bonus = 1.0 / (1.0 + np.log1p(avg_pos))
+            
+            # 4. Длина текста (премия)
+            length_bonus = np.log1p(res.get("full_text_length", 0)) / 10.0
+            
+            # Формула переранживания
+            rerank_score = (0.4 * res["score"] +
+                            0.3 * res["bm25_score"] +
+                            0.2 * exact_match +
+                            0.1 * position_bonus +
+                            0.05 * length_bonus)
+            
+            res["score"] = float(rerank_score)
+            reranked.append(res)
+            
+        reranked.sort(key=lambda x: x["score"], reverse=True)
+        return reranked[:k]
+    
+    def search_by_tags(self, query_tags: List[str], k: int = 10) -> List[Dict[str, Any]]:
+        """
+        Поиск статей по списку тегов (булев поиск).
         
-        logger.info(f"Найдено {len(final_results)} статей")
-        return final_results
+        Args:
+            query_tags: список тегов
+            k: количество результатов
+        
+        Returns:
+            список статей, отсортированных по количеству совпадений
+        """
+        if not self.tagged_articles:
+            return []
+        
+        results = []
+        for article in self.tagged_articles:
+            article_tags = set(article.get("tags", []))
+            matches = len(set(query_tags) & article_tags)
+            
+            if matches > 0:
+                score = matches / len(query_tags) if query_tags else 0.0
+                results.append({
+                    "text": article.get("text", ""),
+                    "tags": article.get("tags", []),
+                    "meta": article.get("meta", {}),
+                    "matches": matches,
+                    "score": score
+                })
+        
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:k]
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Статистика по движку."""
+        return {
+            "num_tags": len(self.tag_names),
+            "num_categories": len(self.raw_tags),
+            "num_articles": len(self.tagged_articles),
+            "tags_per_article": self.tags_per_article,
+            "use_bm25": self.use_bm25,
+            "similarity_weight": self.similarity_weight,
+            "cache_dir": str(self.cache_dir)
+        }
+
+
+# ================== Пример использования ==================
+if __name__ == "__main__":
+    # Инициализация
+    searcher = LegalSemanticSearchEngine(
+        tags_filepath="data/raw/base.json",
+        laws_filepath="data/processed/laws.json",
+        tags_per_article=400,
+        similarity_weight=0.9
+    )
+    
+    # Поиск
+    query = """
+"Банк обязан осуществлять операции по текущему (расчетному) банковскому счету в течение одного банковского дня. При нарушении указанного срока банк уплачивает клиенту пеню в размере 0,1 процента от суммы операции за каждый день просрочки."
+это что-то нарушает?"""
+    results = searcher.search(query, k=50)
+    
+    print(f"\n🔍 Запрос: '{query}'")
+    print(f"Найдено статей: {len(results)}")
+    
+    for i, res in enumerate(results):
+        print(f"\n{i+1}. [Score: {res['score']:.4f}]")
+        print(f"   Источник: {res['meta'].get('source', 'unknown')}")
+        print(f"   Теги: {', '.join(res['tags'][:5])}")
+        print(f"   Текст: {res['text'][:200]}...")
+    
+
+    
