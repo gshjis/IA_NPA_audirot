@@ -64,3 +64,5 @@ backend/examples/documents/
 backend/database/*.db
 backend/storage/
 backend/logs/
+*.npy
+*.json
