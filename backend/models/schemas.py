@@ -28,6 +28,13 @@ class CompareResponse(BaseModel):
     status: AnalysisStatus
 
 
+class UploadAndCompareResponse(BaseModel):
+    analysis_id: str
+    status: AnalysisStatus
+    old_document: DocumentUploadResponse
+    new_document: DocumentUploadResponse
+
+
 class LawMatch(BaseModel):
     law_name: str
     article: str

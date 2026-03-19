@@ -97,7 +97,34 @@ curl -X POST "http://127.0.0.1:8001/analysis/compare" \
 }
 ```
 
-## 6. Получение результата
+## 6. Альтернативно: один запрос с двумя файлами
+
+```bash
+curl -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \
+  -F "old_file=@/mnt/data/IA_NPA_audirot/backend/examples/documents/old_regulation.docx" \
+  -F "new_file=@/mnt/data/IA_NPA_audirot/backend/examples/documents/new_regulation.docx"
+```
+
+Пример ответа:
+
+```json
+{
+  "analysis_id": "ANALYSIS_ID",
+  "status": "pending",
+  "old_document": {
+    "document_id": "OLD_DOC_ID",
+    "filename": "old_regulation.docx",
+    "uploaded_at": "2026-03-18T00:00:00+00:00"
+  },
+  "new_document": {
+    "document_id": "NEW_DOC_ID",
+    "filename": "new_regulation.docx",
+    "uploaded_at": "2026-03-18T00:00:00+00:00"
+  }
+}
+```
+
+## 7. Получение результата
 
 ```bash
 curl "http://127.0.0.1:8001/analysis/ANALYSIS_ID"
@@ -147,7 +174,7 @@ curl "http://127.0.0.1:8001/analysis/ANALYSIS_ID"
 ]
 ```
 
-## 7. Быстрый сценарий через переменные shell
+## 8. Быстрый сценарий через переменные shell
 
 ```bash
 OLD_DOC_ID=$(curl -s -X POST "http://127.0.0.1:8001/documents/upload" \

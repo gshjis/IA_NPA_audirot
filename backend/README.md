@@ -120,7 +120,36 @@ curl -X POST "http://127.0.0.1:8001/analysis/compare" \
 }
 ```
 
-### 3. Result
+### 3. Upload And Compare
+
+Для фронтенда удобнее использовать одну ручку, которая принимает сразу два файла и запускает анализ:
+
+```bash
+curl -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \
+  -F "old_file=@/absolute/path/to/old_version.docx" \
+  -F "new_file=@/absolute/path/to/new_version.docx"
+```
+
+Ответ:
+
+```json
+{
+  "analysis_id": "e1820ff3-f071-45f9-b22d-300ca97d57d0",
+  "status": "pending",
+  "old_document": {
+    "document_id": "OLD_DOC_ID",
+    "filename": "old_version.docx",
+    "uploaded_at": "2026-03-17T10:00:00+00:00"
+  },
+  "new_document": {
+    "document_id": "NEW_DOC_ID",
+    "filename": "new_version.docx",
+    "uploaded_at": "2026-03-17T10:00:01+00:00"
+  }
+}
+```
+
+### 4. Result
 
 ```bash
 curl "http://127.0.0.1:8001/analysis/e1820ff3-f071-45f9-b22d-300ca97d57d0"
