@@ -4,5 +4,6 @@
   background-color: var(--white-soft);
   border: 1px solid var(--gray);
   border-radius: 16px;
-  padding: 25px;
+  padding: 2.5rem;
+  margin-bottom: 3rem;
 }

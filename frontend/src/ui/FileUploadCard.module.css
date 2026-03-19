@@ -1,0 +1,162 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.uploadCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1rem;
+  padding: 2rem;
+  min-height: 200px;
+  border: 2px dashed rgba(20, 35, 21, 0.2);
+  border-radius: 12px;
+  background: rgba(239, 236, 242, 0.5);
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.uploadCard:hover {
+  border-color: rgba(20, 35, 21, 0.35);
+  background: rgba(239, 236, 242, 0.7);
+}
+
+.fileInput {
+  display: none;
+}
+
+.iconCircle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 2px 8px rgba(20, 35, 21, 0.08);
+  color: var(--black);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--black);
+}
+
+.cardDesc {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(20, 35, 21, 0.65);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.fileLabel {
+  display: flex;
+  align-items: center;
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  color: rgba(20, 35, 21, 0.7);
+}
+
+.fileInfo {
+  position: absolute;
+  inset: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background: var(--white);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(20, 35, 21, 0.06);
+  overflow: hidden;
+}
+
+.previewArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 35, 21, 0.03);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.previewFrame {
+  width: calc(100% + 17px);
+  height: 100%;
+  border: none;
+  border-radius: 6px;
+  margin-right: -17px;
+}
+
+.docxPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(20, 35, 21, 0.4);
+}
+
+.docxExt {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.05em;
+}
+
+.fileBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding-top: 0.5rem;
+  min-width: 0;
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--black);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.removeBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(20, 35, 21, 0.6);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.removeBtn:hover {
+  color: var(--red);
+  background: rgba(205, 83, 83, 0.1);
+}
+
+.replaceHint {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: rgba(20, 35, 21, 0.45);
+}
