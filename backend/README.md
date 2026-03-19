@@ -5,8 +5,8 @@ FastAPI backend для анализа изменений нормативных 
 - загружает PDF/DOCX документы
 - сравнивает старую и новую версии
 - вызывает существующий retrieval API по HTTP
-- отправляет изменения и найденные нормы в Claude через CometAPI
-- сохраняет результаты в SQLite
+- отправляет изменения и найденные нормы в Grok через OpenRouter
+- сохраняет результаты в PostgreSQL
 
 ## Структура
 
@@ -38,6 +38,7 @@ backend/
 - `pdfplumber`
 - `python-docx`
 - `sentence-transformers`
+- `psycopg`
 
 ## Переменные окружения
 
@@ -53,28 +54,32 @@ set +a
 Доступные переменные:
 
 ```bash
+export BACKEND_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/npa_analysis"
+export BACKEND_CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
 export COMETAPI_API_KEY="your-cometapi-key"
-export COMETAPI_BASE_URL="https://api.cometapi.com/v1"
-export COMETAPI_MODEL="claude-3-5-haiku-latest"
+export COMETAPI_BASE_URL="https://openrouter.ai/api/v1"
+export COMETAPI_MODEL="x-ai/grok-4.1-fast"
 export RETRIEVAL_SERVICE_URL="http://127.0.0.1:8000"
 export RETRIEVAL_TOP_K="3"
+export RETRIEVAL_CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8001,http://127.0.0.1:8001"
 export SEMANTIC_MODEL_NAME="deepvk/USER2-base"
 export SEMANTIC_MODEL_LOCAL_ONLY="false"
 ```
 
 ## Как запустить
 
-1. Подними retrieval API из существующего проекта:
+1. Подними все сервисы одной командой:
 
 ```bash
-uvicorn src.api.main:app --reload --port 8000
+docker compose up --build
 ```
 
-2. Подними новый backend:
+2. Swagger/OpenAPI для фронтендера:
 
-```bash
-uvicorn backend.main:app --reload --port 8001
-```
+- Backend Swagger: `http://127.0.0.1:8001/docs`
+- Backend OpenAPI JSON: `http://127.0.0.1:8001/openapi.json`
+- Retrieval Swagger: `http://127.0.0.1:8000/docs`
+- Retrieval OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
 
 ## API
 
@@ -164,5 +169,8 @@ curl "http://127.0.0.1:8001/analysis/e1820ff3-f071-45f9-b22d-300ca97d57d0"
 ## Примечания
 
 - Retrieval сервис не изменяется и вызывается только по HTTP.
+- Оба FastAPI сервиса поднимают Swagger UI на `/docs` и schema JSON на `/openapi.json`.
+- Для браузерного фронтенда включен CORS через `BACKEND_CORS_ORIGINS` и `RETRIEVAL_CORS_ORIGINS`.
+- Если данные retrieval (`data/raw/base.json`, `data/processed/laws.json`) отсутствуют, сервис всё равно стартует, но `/search` вернет `503` с описанием проблемы.
 - Если CometAPI или модель sentence-transformers недоступны, backend использует fallback-оценку и продолжает анализ.
-- Все результаты и метаданные хранятся в SQLite: `backend/database/app.db`.
+- Все результаты и метаданные хранятся в PostgreSQL, таблицы создаются автоматически при старте backend.

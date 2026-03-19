@@ -26,7 +26,7 @@ class LLMService:
         change_type: str,
     ) -> dict[str, Any]:
         if not self._api_key:
-            logger.warning("CometAPI key is not configured, using heuristic analysis")
+            logger.warning("LLM provider key is not configured, using heuristic analysis")
             return self._heuristic_response(
                 article=article,
                 old_text=old_text,
@@ -73,7 +73,7 @@ Semantic similarity: {similarity}
                     },
                     json={
                         "model": self._model,
-                        "temperature": 0,
+                        "temperature": 0.2,
                         "max_tokens": 600,
                         "messages": [
                             {
@@ -92,7 +92,7 @@ Semantic similarity: {similarity}
                 payload = response.json()
             content = self._extract_message_content(payload)
         except Exception as exc:
-            logger.warning("CometAPI request failed: %s. Using heuristic response.", exc)
+            logger.warning("LLM request failed: %s. Using heuristic response.", exc)
             return self._heuristic_response(
                 article=article,
                 old_text=old_text,
@@ -104,7 +104,7 @@ Semantic similarity: {similarity}
 
         parsed = self._parse_json_content(content)
         if parsed is None:
-            logger.warning("Failed to parse CometAPI response as JSON, using heuristic fallback")
+            logger.warning("Failed to parse LLM response as JSON, using heuristic fallback")
             return self._heuristic_response(
                 article=article,
                 old_text=old_text,
@@ -125,7 +125,7 @@ Semantic similarity: {similarity}
     def _extract_message_content(self, payload: dict[str, Any]) -> str:
         choices = payload.get("choices", [])
         if not choices:
-            raise ValueError("CometAPI response does not contain choices")
+            raise ValueError("LLM response does not contain choices")
         message = choices[0].get("message", {}) or {}
         content = message.get("content", "")
         if isinstance(content, str):

@@ -2,6 +2,94 @@
 
 Система семантического анализа и тегирования нормативно-правовых актов (НПА).
 
+## Запуск
+
+### 1. Подготовка `.env`
+
+Скопируй шаблон переменных окружения:
+
+```bash
+cp .env.example .env
+```
+
+Минимально проверь в `.env`:
+
+```bash
+BACKEND_DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/npa_analysis"
+COMETAPI_BASE_URL="https://openrouter.ai/api/v1"
+COMETAPI_MODEL="x-ai/grok-4.1-fast"
+```
+
+### 2. Быстрый локальный запуск без Poetry
+
+Создай отдельное виртуальное окружение и поставь минимальные зависимости для backend:
+
+```bash
+python3 -m venv .venv_clean
+source .venv_clean/bin/activate
+python3 -m ensurepip --upgrade
+python3 -m pip install --upgrade pip setuptools wheel
+python3 -m pip install fastapi uvicorn pydantic httpx python-multipart pdfplumber python-docx "psycopg[binary]"
+```
+
+Если PostgreSQL уже запущен локально на `127.0.0.1:5432`, можно сразу стартовать backend:
+
+```bash
+set -a
+source .env
+set +a
+python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8001
+```
+
+Swagger backend:
+
+- `http://127.0.0.1:8001/docs`
+- `http://127.0.0.1:8001/openapi.json`
+
+### 3. Запуск PostgreSQL через Docker
+
+Если локального PostgreSQL нет, подними контейнер:
+
+```bash
+docker compose up -d postgres
+```
+
+Если Docker пишет, что порт `5432` занят, значит у тебя уже работает локальный Postgres или другой контейнер. В таком случае:
+
+- либо используй уже запущенный Postgres и не запускай `docker compose up -d postgres`
+- либо поменяй порт в `docker-compose.yml`, например на `5433:5432`, и обнови `BACKEND_DATABASE_URL` в `.env`
+
+### 4. Полный запуск через Docker Compose
+
+Для полного старта всех сервисов:
+
+```bash
+docker compose up --build
+```
+
+После запуска будут доступны:
+
+- backend Swagger: `http://127.0.0.1:8001/docs`
+- backend OpenAPI: `http://127.0.0.1:8001/openapi.json`
+- retrieval Swagger: `http://127.0.0.1:8000/docs`
+- retrieval OpenAPI: `http://127.0.0.1:8000/openapi.json`
+
+### 5. Полезные проверки
+
+Healthcheck backend:
+
+```bash
+curl http://127.0.0.1:8001/health
+```
+
+Логи Docker:
+
+```bash
+docker compose logs -f
+```
+
+Подробная документация по backend находится в `backend/README.md`.
+
 ## Суть проекта
 Проект предназначен для автоматического анализа текстов НПА (на примере Конституции Республики Беларусь), их тегирования на основе семантической близости к заданным тематикам и интеллектуального поиска статей по запросу пользователя.
 

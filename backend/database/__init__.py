@@ -1,1 +1,1 @@
-"""SQLite helpers."""
+"""PostgreSQL helpers."""
