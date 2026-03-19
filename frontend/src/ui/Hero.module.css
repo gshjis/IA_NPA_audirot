@@ -1,3 +1,14 @@
+.header {
+  padding: 1.5rem 0 2rem;
+}
+
+.imgWrapper {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(20, 35, 21, 0.08);
+}
+
 .img {
-    width: 100%;
+  width: 100%;
+  display: block;
 }

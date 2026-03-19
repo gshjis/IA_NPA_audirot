@@ -1,0 +1,25 @@
+:root {
+  --white: #ffffff;
+  --white-soft: #f0f4f7;
+  --red: #cd5353;
+  --black: #142315;
+  --orange: #dfa053;
+  --green: #50ac5f;
+  --gray: #e6ebeb ;
+
+  /* Typography: switch between Inter (default) and Montserrat */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Montserrat", system-ui, sans-serif;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

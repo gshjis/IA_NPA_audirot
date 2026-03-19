@@ -1,0 +1,8 @@
+.main {
+  display: flex;
+  gap: 4rem;
+  background-color: var(--white-soft);
+  border: 1px solid var(--gray);
+  border-radius: 16px;
+  padding: 25px;
+}
