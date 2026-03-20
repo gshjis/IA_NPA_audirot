@@ -216,9 +216,12 @@ function RemovedBlock({ row }: { row: AnalysisChangeRow }) {
 
 type Props = {
   rows: AnalysisChangeRow[];
+  /** Индекс строки в списке результатов — для прокрутки с дорожки */
+  rowDomId?: (index: number) => string;
 };
 
-export function AnalysisRevisionPreview({ rows }: Props) {
+export function AnalysisRevisionPreview({ rows, rowDomId }: Props) {
+  const idAt = rowDomId ?? ((i: number) => `analysis-change-${i}`);
   return (
     <div className={styles.previewDoc}>
       <p className={styles.previewDocTitle}>
@@ -226,11 +229,16 @@ export function AnalysisRevisionPreview({ rows }: Props) {
       </p>
       {rows.map((row, i) => {
         const key = `${row.article}-${i}`;
+        const anchorId = idAt(i);
         if (row.change_type === "removed") {
-          return <RemovedBlock key={key} row={row} />;
+          return (
+            <div key={key} id={anchorId}>
+              <RemovedBlock row={row} />
+            </div>
+          );
         }
         return (
-          <p key={key} className={styles.previewPara}>
+          <p key={key} id={anchorId} className={styles.previewPara}>
             <span className={styles.artLabel}>п. {row.article}</span>
             <HighlightedFragment row={row} />
           </p>
