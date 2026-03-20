@@ -318,6 +318,81 @@ class LegalSemanticSearchEngine:
         
         return [(self.tag_names[i], float(similarities[i])) for i in top_indices]
     
+    def _get_word_proximity_score(self, query: str, text: str) -> float:
+        """Расчет близости слов (word distance)."""
+        query_words = [w.lower() for w in query.split() if len(w) > 3]
+        if not query_words: return 0.0
+        
+        text_words = [w.lower() for w in text.split()]
+        indices = [i for i, w in enumerate(text_words) if w in query_words]
+        if len(indices) < 2: return 0.0
+        
+        # Среднее расстояние между вхождениями
+        distances = [indices[i+1] - indices[i] for i in range(len(indices)-1)]
+        avg_dist = np.mean(distances)
+        return 1.0 / (1.0 + np.log1p(avg_dist))
+
+    def _get_keyword_density_score(self, query: str, text: str) -> float:
+        """Расчет плотности ключевых слов."""
+        query_words = [w.lower() for w in query.split() if len(w) > 3]
+        if not query_words: return 0.0
+        
+        text_words = [w.lower() for w in text.split()]
+        if not text_words: return 0.0
+        
+        matches = sum(1 for w in text_words if w in query_words)
+        return matches / len(text_words)
+
+    def _get_ner_score(self, query: str, text: str) -> float:
+        """Расчет совпадения сущностей (упрощенный)."""
+        # В реальном проекте здесь должна быть библиотека типа Natasha
+        # Для примера ищем числа и специфические юридические термины
+        import re
+        query_entities = set(re.findall(r'\d+|ст\.|статья|банк|процент', query.lower()))
+        if not query_entities: return 0.0
+        
+        text_entities = set(re.findall(r'\d+|ст\.|статья|банк|процент', text.lower()))
+        matches = len(query_entities & text_entities)
+        return matches / len(query_entities)
+
+    def _get_word_proximity_score(self, query: str, text: str) -> float:
+        """Расчет близости слов (word distance)."""
+        query_words = [w.lower() for w in query.split() if len(w) > 3]
+        if not query_words: return 0.0
+        
+        text_words = [w.lower() for w in text.split()]
+        indices = [i for i, w in enumerate(text_words) if w in query_words]
+        if len(indices) < 2: return 0.0
+        
+        # Среднее расстояние между вхождениями
+        distances = [indices[i+1] - indices[i] for i in range(len(indices)-1)]
+        avg_dist = np.mean(distances)
+        return 1.0 / (1.0 + np.log1p(avg_dist))
+
+    def _get_keyword_density_score(self, query: str, text: str) -> float:
+        """Расчет плотности ключевых слов."""
+        query_words = [w.lower() for w in query.split() if len(w) > 3]
+        if not query_words: return 0.0
+        
+        text_words = [w.lower() for w in text.split()]
+        if not text_words: return 0.0
+        
+        matches = sum(1 for w in text_words if w in query_words)
+        return matches / len(text_words)
+
+    def _get_ner_score(self, query: str, text: str) -> float:
+        """Простой поиск совпадений сущностей (ст. N, даты)."""
+        # В реальном проекте здесь должна быть библиотека типа Natasha
+        # Для примера ищем паттерны "статья X"
+        import re
+        query_articles = re.findall(r'стать[яеи]\s+\d+', query.lower())
+        text_articles = re.findall(r'стать[яеи]\s+\d+', text.lower())
+        
+        if not query_articles: return 0.0
+        
+        matches = len(set(query_articles) & set(text_articles))
+        return matches / len(query_articles)
+
     def search(
         self,
         query: str,
@@ -352,6 +427,16 @@ class LegalSemanticSearchEngine:
             tag: (score * self.idf_weights.get(tag, 1.0)) / np.sqrt(pos + 1)
             for pos, (tag, score) in enumerate(query_tags)
         }
+
+        # Контекст запроса: теги и категории
+        query_categories = []
+        # Сохраняем порядок как в query_tags
+        seen_categories = set()
+        for tag, _score in query_tags:
+            cat = self.tag_to_category.get(tag)
+            if cat and cat not in seen_categories:
+                seen_categories.add(cat)
+                query_categories.append(cat)
         
         # 2. BM25 scores
         if self.use_bm25:
@@ -409,32 +494,97 @@ class LegalSemanticSearchEngine:
         
         # Переранжирование
         reranked = []
-        tokenized_query = query.split()
-        for res in candidates:
+        
+        # Векторное переранжирование (дополнительный уровень)
+        query_embedding = self.model.encode([query], normalize_embeddings=True)[0]
+        candidate_embeddings = np.array([self.article_embeddings[self.laws_data.index(res["meta"]["original"])] for res in candidates])
+        vector_similarities = cosine_similarity([query_embedding], candidate_embeddings)[0]
+        
+        for i, res in enumerate(candidates):
             # 1. BM25 (уже есть)
             # 2. Точное совпадение (премия)
             exact_match = 1.0 if query.lower() in res["text"].lower() else 0.0
             
             # 3. Позиция тегов (штраф, если теги глубоко)
-            # Средняя позиция тегов в статье
             avg_pos = np.mean(list(res.get("tag_positions", {}).values())) if res.get("tag_positions") else 100
             position_bonus = 1.0 / (1.0 + np.log1p(avg_pos))
             
             # 4. Длина текста (премия)
             length_bonus = np.log1p(res.get("full_text_length", 0)) / 10.0
             
+            # 5. Векторное сходство (новый уровень)
+            vector_score = float(vector_similarities[i])
+            
+            # 6. Лексические методы
+            proximity_score = self._get_word_proximity_score(query, res["text"])
+            density_score = self._get_keyword_density_score(query, res["text"])
+            ner_score = self._get_ner_score(query, res["text"])
+            
             # Формула переранживания
-            rerank_score = (0.4 * res["score"] +
-                            0.3 * res["bm25_score"] +
-                            0.2 * exact_match +
-                            0.1 * position_bonus +
-                            0.05 * length_bonus)
+            rerank_score = (0.25 * res["score"] +
+                            0.15 * res["bm25_score"] +
+                            0.20 * vector_score +
+                            0.10 * exact_match +
+                            0.10 * proximity_score +
+                            0.05 * density_score +
+                            0.10 * ner_score +
+                            0.03 * position_bonus +
+                            0.02 * length_bonus)
             
             res["score"] = float(rerank_score)
+            # Добавляем явные поля для источника и номера статьи
+            res["source"] = res["meta"].get("source")
+            # Проверяем все возможные ключи для номера статьи
+            original = res["meta"].get("original", {})
+            res["article_number"] = (
+                original.get("number") or
+                original.get("article_number") or
+                original.get("article") or
+                original.get("id") or
+                "N/A"
+            )
             reranked.append(res)
+
+            # Добавляем теги/категории самого запроса (одинаково для каждого результата)
+            res["query_tags"] = [tag for tag, _w in query_tags]
+            res["query_categories"] = query_categories
             
         reranked.sort(key=lambda x: x["score"], reverse=True)
         return reranked[:k]
+
+    def search_batch(
+        self,
+        queries: List[str],
+        k: int = 10,
+        semantic_weight: Optional[float] = None
+    ) -> List[List[Dict[str, Any]]]:
+        """Пакетный поиск для списка запросов.
+
+        Реализует последовательный вызов :meth:`search` для каждого запроса.
+        Возвращает список результатов в том же порядке, что и входные запросы.
+
+        Args:
+            queries: список поисковых запросов
+            k: количество результатов на запрос
+            semantic_weight: вес семантики (если None, используется self.similarity_weight)
+
+        Returns:
+            Список из результатов для каждого запроса.
+            Каждый элемент имеет тип ``List[Dict[str, Any]]``.
+        """
+        if not queries:
+            return []
+
+        results_batch: List[List[Dict[str, Any]]] = []
+        for q in queries:
+            # Явная обработка пустых/None запросов
+            if q is None or not isinstance(q, str) or not q.strip():
+                results_batch.append([])
+                continue
+
+            results_batch.append(self.search(q, k=k, semantic_weight=semantic_weight))
+
+        return results_batch
     
     def search_by_tags(self, query_tags: List[str], k: int = 10) -> List[Dict[str, Any]]:
         """
@@ -459,7 +609,7 @@ class LegalSemanticSearchEngine:
                 score = matches / len(query_tags) if query_tags else 0.0
                 results.append({
                     "text": article.get("text", ""),
-                    "tags": article.get("tags", []),
+                    "tags": article.get("tags", [])[:5],
                     "meta": article.get("meta", {}),
                     "matches": matches,
                     "score": score
@@ -487,14 +637,13 @@ if __name__ == "__main__":
     searcher = LegalSemanticSearchEngine(
         tags_filepath="data/raw/base.json",
         laws_filepath="data/processed/laws.json",
-        tags_per_article=400,
+        tags_per_article=600,
         similarity_weight=0.9
     )
     
     # Поиск
-    query = """
-"Банк обязан осуществлять операции по текущему (расчетному) банковскому счету в течение одного банковского дня. При нарушении указанного срока банк уплачивает клиенту пеню в размере 0,1 процента от суммы операции за каждый день просрочки."
-это что-то нарушает?"""
+    query = """Порядок реорганизации юридического лица в форме слияния и присоединения. 
+Права кредиторов при реорганизации. Составление передаточного акта и разделительного баланса."""
     results = searcher.search(query, k=50)
     
     print(f"\n🔍 Запрос: '{query}'")
@@ -505,6 +654,3 @@ if __name__ == "__main__":
         print(f"   Источник: {res['meta'].get('source', 'unknown')}")
         print(f"   Теги: {', '.join(res['tags'][:5])}")
         print(f"   Текст: {res['text'][:200]}...")
-    
-
-    
