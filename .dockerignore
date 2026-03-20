@@ -1,6 +1,9 @@
 .git
 .gitignore
+.env
+.env.local
 .venv
+.venv_clean
 __pycache__
 *.pyc
 *.pyo
@@ -8,7 +11,10 @@ __pycache__
 .pytest_cache
 .mypy_cache
 .ruff_cache
+.cache
 backend/logs
 backend/storage/documents
 backend/storage/model_cache
+scripts/data/cache
+data/processed/cache
 logs

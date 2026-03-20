@@ -46,21 +46,37 @@ class AnalysisService:
                 new_sections,
             )
 
+            prepared_changes: list[tuple[str, dict[str, Any]]] = []
+            retrieval_queries: dict[str, str] = {}
+            for index, change in enumerate(changes, start=1):
+                query_id = f"change_{index}"
+                query_text = str(change.get("new") or change.get("old") or "")
+                prepared_changes.append((query_id, change))
+                if query_text.strip():
+                    retrieval_queries[query_id] = query_text
+
+            retrieval_results: dict[str, list[dict[str, Any]]]
+            if retrieval_queries:
+                try:
+                    retrieval_results = await self.retrieval_service.search_laws_batch(retrieval_queries)
+                except Exception as exc:
+                    logger.warning(
+                        "Retrieval service batch request failed for %s changes: %s",
+                        len(retrieval_queries),
+                        exc,
+                    )
+                    retrieval_results = {query_id: [] for query_id in retrieval_queries}
+            else:
+                retrieval_results = {}
+
             results: list[dict[str, Any]] = []
-            for change in changes:
+            for query_id, change in prepared_changes:
                 semantic = await asyncio.to_thread(
                     self.semantic_service.compare,
                     str(change.get("old", "")),
                     str(change.get("new", "")),
                 )
-                query_text = str(change.get("new") or change.get("old") or "")
-
-                laws: list[dict[str, Any]]
-                try:
-                    laws = await self.retrieval_service.search_laws(query_text)
-                except Exception as exc:
-                    logger.warning("Retrieval service request failed for article %s: %s", change["article"], exc)
-                    laws = []
+                laws = retrieval_results.get(query_id, [])
 
                 llm_result = await self.llm_service.analyze_change(
                     article=str(change["article"]),
@@ -80,11 +96,15 @@ class AnalysisService:
                         "new": change.get("new", ""),
                         "similarity": semantic.similarity,
                         "semantic_method": semantic.method,
+                        "relation": llm_result["relation"],
                         "conflict": llm_result["conflict"],
                         "risk": llm_result["risk"],
+                        "confidence": llm_result["confidence"],
                         "law": llm_result["law"],
                         "law_article": llm_result["law_article"],
+                        "evidence": llm_result["evidence"],
                         "explanation": llm_result["explanation"],
+                        "assessment_source": llm_result["assessment_source"],
                         "laws": flattened_laws,
                     }
                 )

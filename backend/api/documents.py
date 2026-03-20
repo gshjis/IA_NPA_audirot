@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, UploadFile
 
 from backend.config import settings
 from backend.database.db import insert_document
@@ -36,11 +37,11 @@ def _detect_extension(filename: str, content_type: str | None) -> str:
     return CONTENT_TYPE_TO_EXTENSION.get(normalized_content_type, "")
 
 
-@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
-async def upload_document(file: UploadFile = File(...)) -> DocumentUploadResponse:
+async def store_uploaded_document(file: UploadFile) -> dict[str, Any]:
     filename = _normalize_filename(file.filename)
     extension = _detect_extension(filename, file.content_type)
     if extension not in ALLOWED_EXTENSIONS:
+        await file.close()
         raise HTTPException(
             status_code=400,
             detail=(
@@ -54,10 +55,10 @@ async def upload_document(file: UploadFile = File(...)) -> DocumentUploadRespons
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
     content = await file.read()
+    await file.close()
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
     target_path.write_bytes(content)
-    await file.close()
 
     stored_filename = filename or f"{document_id}{extension}"
 
@@ -68,6 +69,10 @@ async def upload_document(file: UploadFile = File(...)) -> DocumentUploadRespons
         file_path=str(target_path),
     )
     logger.info("Document %s uploaded as %s", document["id"], document["file_path"])
+    return document
+
+
+def build_document_upload_response(document: dict[str, Any]) -> DocumentUploadResponse:
     return DocumentUploadResponse(
         document_id=document["id"],
         filename=document["filename"],
