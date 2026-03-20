@@ -68,7 +68,22 @@ curl -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \
 }
 ```
 
-## 4. Получение результата
+## 4. Статистика
+
+```bash
+curl "http://127.0.0.1:8001/analysis/stats"
+```
+
+Пример ответа:
+
+```json
+{
+  "total_documents_scanned": 12,
+  "total_changes_found": 37
+}
+```
+
+## 5. Получение результата
 
 ```bash
 curl "http://127.0.0.1:8001/analysis/ANALYSIS_ID"
@@ -118,7 +133,7 @@ curl "http://127.0.0.1:8001/analysis/ANALYSIS_ID"
 ]
 ```
 
-## 5. Быстрый сценарий через переменные shell
+## 6. Быстрый сценарий через переменные shell
 
 ```bash
 ANALYSIS_ID=$(curl -s -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \

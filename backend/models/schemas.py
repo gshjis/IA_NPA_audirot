@@ -25,6 +25,11 @@ class UploadAndCompareResponse(BaseModel):
     new_document: DocumentUploadResponse
 
 
+class AnalysisStatisticsResponse(BaseModel):
+    total_documents_scanned: int = Field(default=0, ge=0)
+    total_changes_found: int = Field(default=0, ge=0)
+
+
 class LawMatch(BaseModel):
     law_name: str
     article: str

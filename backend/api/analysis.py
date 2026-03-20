@@ -6,10 +6,11 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
 
 from backend.api.documents import build_document_upload_response, store_uploaded_document
-from backend.database.db import create_analysis, get_analysis
+from backend.database.db import create_analysis, get_analysis, get_analysis_statistics
 from backend.logger import logger
 from backend.models.schemas import (
     AnalysisResultItem,
+    AnalysisStatisticsResponse,
     AnalysisStatusResponse,
     UploadAndCompareResponse,
 )
@@ -70,6 +71,12 @@ async def upload_and_compare_documents(
         old_document=build_document_upload_response(old_document),
         new_document=build_document_upload_response(new_document),
     )
+
+
+@router.get("/stats", response_model=AnalysisStatisticsResponse)
+async def get_analysis_stats() -> AnalysisStatisticsResponse:
+    stats = get_analysis_statistics()
+    return AnalysisStatisticsResponse(**stats)
 
 
 @router.get(

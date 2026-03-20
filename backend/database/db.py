@@ -210,3 +210,29 @@ def get_analysis(analysis_id: str) -> dict[str, Any] | None:
             (analysis_id,),
         ).fetchone()
     return _normalize_analysis_row(row)
+
+
+def get_analysis_statistics() -> dict[str, int]:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT
+                (SELECT COUNT(*)::int FROM documents) AS total_documents_scanned,
+                (
+                    SELECT COALESCE(SUM(jsonb_array_length(result_json)), 0)::int
+                    FROM analyses
+                    WHERE status = 'completed'
+                ) AS total_changes_found
+            """
+        ).fetchone()
+
+    if row is None:
+        return {
+            "total_documents_scanned": 0,
+            "total_changes_found": 0,
+        }
+
+    return {
+        "total_documents_scanned": int(row["total_documents_scanned"]),
+        "total_changes_found": int(row["total_changes_found"]),
+    }

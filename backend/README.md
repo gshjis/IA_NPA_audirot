@@ -155,7 +155,22 @@ curl -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \
 }
 ```
 
-### 2. Result
+### 2. Statistics
+
+```bash
+curl "http://127.0.0.1:8001/analysis/stats"
+```
+
+Ответ:
+
+```json
+{
+  "total_documents_scanned": 12,
+  "total_changes_found": 37
+}
+```
+
+### 3. Result
 
 ```bash
 curl "http://127.0.0.1:8001/analysis/e1820ff3-f071-45f9-b22d-300ca97d57d0"
