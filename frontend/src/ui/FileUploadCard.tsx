@@ -8,6 +8,9 @@ type FileUploadCardProps = {
   title: string;
   description: string;
   icon: React.ReactNode;
+  file: File | null;
+  onFileChange: (file: File | null) => void;
+  hasError?: boolean;
 };
 
 function getFileExt(file: File) {
@@ -18,25 +21,35 @@ export function FileUploadCard({
   title,
   description,
   icon,
+  file,
+  onFileChange,
+  hasError = false,
 }: FileUploadCardProps) {
-  const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      queueMicrotask(() => setPreviewUrl(url));
+      return () => URL.revokeObjectURL(url);
+    }
+    queueMicrotask(() => setPreviewUrl(null));
+    return () => {};
+  }, [file]);
+
+  useEffect(() => {
+    if (!file && inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }, [file]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (selected) {
       const ext = getFileExt(selected);
       if (ext === "pdf" || ext === "docx") {
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
-        setFile(selected);
-        setPreviewUrl(URL.createObjectURL(selected));
+        onFileChange(selected);
       }
     }
   };
@@ -44,9 +57,7 @@ export function FileUploadCard({
   const handleRemove = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setFile(null);
-    setPreviewUrl(null);
+    onFileChange(null);
     if (inputRef.current) {
       inputRef.current.value = "";
     }
@@ -58,7 +69,9 @@ export function FileUploadCard({
     <div className={styles.wrapper}>
       <h3 className={styles.cardTitle}>{title}</h3>
       <p className={styles.cardDesc}>{description}</p>
-      <label className={styles.uploadCard}>
+      <label
+        className={`${styles.uploadCard} ${hasError ? styles.uploadCardError : ""}`}
+      >
         <input
           ref={inputRef}
           type="file"

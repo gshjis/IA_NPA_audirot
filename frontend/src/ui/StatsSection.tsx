@@ -1,7 +1,17 @@
+import {
+  computeAnalysisStats,
+  type AnalysisChangeRow,
+} from "../api/analysisTypes";
 import { Icon } from "../icons/Icon";
 import styles from "./StatsSection.module.css";
 
-export function StatsSection() {
+type StatsSectionProps = {
+  rows: AnalysisChangeRow[] | null;
+};
+
+export function StatsSection({ rows }: StatsSectionProps) {
+  const { total, critical, pending } = computeAnalysisStats(rows);
+
   return (
     <section className={styles.section}>
       <div className={styles.card} data-variant="found">
@@ -10,7 +20,7 @@ export function StatsSection() {
         </div>
         <div className={styles.content}>
           <h3 className={styles.title}>Найдено изменений</h3>
-          <p className={styles.value}>102</p>
+          <p className={styles.value}>{total}</p>
         </div>
       </div>
       <div className={styles.card} data-variant="critical">
@@ -19,7 +29,7 @@ export function StatsSection() {
         </div>
         <div className={styles.content}>
           <h3 className={styles.title}>Критично</h3>
-          <p className={styles.value}>42</p>
+          <p className={styles.value}>{critical}</p>
           <p className={styles.subtitle}>Требуется немедленная проверка</p>
         </div>
       </div>
@@ -30,7 +40,7 @@ export function StatsSection() {
         </div>
         <div className={styles.content}>
           <h3 className={styles.title}>Ожидание</h3>
-          <p className={styles.value}>156</p>
+          <p className={styles.value}>{pending}</p>
           <p className={styles.subtitle}>Требует проверки человеком</p>
         </div>
       </div>

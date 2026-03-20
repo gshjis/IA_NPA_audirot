@@ -28,6 +28,16 @@
   background: rgba(239, 236, 242, 0.7);
 }
 
+.uploadCardError {
+  border-color: var(--red);
+  background: rgba(205, 83, 83, 0.08);
+}
+
+.uploadCardError:hover {
+  border-color: var(--red);
+  background: rgba(205, 83, 83, 0.12);
+}
+
 .fileInput {
   display: none;
 }

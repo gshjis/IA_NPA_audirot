@@ -1,0 +1,26 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: linear-gradient(158deg, var(--white) 0%, var(--white-soft) 100%);
+  border: 1px solid rgba(20, 35, 21, 0.1);
+  color: var(--black);
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  box-shadow:
+    inset 6px 0 14px -6px rgba(20, 35, 21, 0.2),
+    inset 0 -6px 14px -6px rgba(20, 35, 21, 0.16),
+    3px 4px 0 rgba(20, 35, 21, 0.07);
+}
+
+.icon {
+  color: var(--green);
+}
+
+.label {
+  text-align: left;
+}

@@ -1,6 +1,6 @@
 :root {
   --white: #ffffff;
-  --white-soft: #f0f4f7;
+  --white-soft: #f1f5f8;
   --red: #cd5353;
   --black: #142315;
   --orange: #dfa053;
@@ -15,6 +15,7 @@
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
+  --font-weight-extra-bold: 800;
 }
 
 body {

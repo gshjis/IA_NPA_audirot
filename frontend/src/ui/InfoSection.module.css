@@ -6,4 +6,23 @@
   border-radius: 16px;
   padding: 2.5rem;
   margin-bottom: 3rem;
+  animation: infoSectionEnter 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.12s;
+}
+
+@keyframes infoSectionEnter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main {
+    animation: none;
+  }
 }
