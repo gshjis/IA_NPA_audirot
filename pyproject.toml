@@ -1,3 +1,10 @@
+[tool.poetry]
+package-mode = false
+name = "ia-npa-audirot"
+version = "0.1.0"
+description = "Проект IA NPA Audirot для обработки документов и поиска"
+authors = ["Ваше Имя <ваш.email@example.com>"]
+
 [tool.poetry.dependencies]
 python = "^3.12"
 nltk = {version = "3.8.1", optional = true}
@@ -19,6 +26,7 @@ python-docx = "^1.1.2"
 psycopg = {version = "^3.2.6", extras = ["binary"]}
 rank-bm25 = "^0.2.2"
 logger = "^1.4"
+requests = "^2.32.5"
 
 [tool.poetry.group.dev.dependencies]
 
