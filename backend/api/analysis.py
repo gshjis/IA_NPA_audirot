@@ -6,13 +6,11 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
 
 from backend.api.documents import build_document_upload_response, store_uploaded_document
-from backend.database.db import create_analysis, get_analysis, get_document
+from backend.database.db import create_analysis, get_analysis
 from backend.logger import logger
 from backend.models.schemas import (
     AnalysisResultItem,
     AnalysisStatusResponse,
-    CompareRequest,
-    CompareResponse,
     UploadAndCompareResponse,
 )
 from backend.services.analysis_service import AnalysisService
@@ -47,24 +45,6 @@ def _queue_analysis(
         new_document_id,
     )
     return analysis_id
-
-
-@router.post("/compare", response_model=CompareResponse, status_code=status.HTTP_202_ACCEPTED)
-async def compare_documents(
-    request: CompareRequest,
-    background_tasks: BackgroundTasks,
-) -> CompareResponse:
-    if get_document(request.old_document_id) is None:
-        raise HTTPException(status_code=404, detail="Old document not found")
-    if get_document(request.new_document_id) is None:
-        raise HTTPException(status_code=404, detail="New document not found")
-
-    analysis_id = _queue_analysis(
-        background_tasks,
-        old_document_id=request.old_document_id,
-        new_document_id=request.new_document_id,
-    )
-    return CompareResponse(analysis_id=analysis_id, status="pending")
 
 
 @router.post(

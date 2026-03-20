@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, UploadFile
 
 from backend.config import settings
 from backend.database.db import insert_document
@@ -78,9 +78,3 @@ def build_document_upload_response(document: dict[str, Any]) -> DocumentUploadRe
         filename=document["filename"],
         uploaded_at=datetime.fromisoformat(document["created_at"]).astimezone(UTC),
     )
-
-
-@router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_201_CREATED)
-async def upload_document(file: UploadFile = File(...)) -> DocumentUploadResponse:
-    document = await store_uploaded_document(file)
-    return build_document_upload_response(document)

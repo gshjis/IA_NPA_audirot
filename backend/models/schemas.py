@@ -18,16 +18,6 @@ class DocumentUploadResponse(BaseModel):
     uploaded_at: datetime
 
 
-class CompareRequest(BaseModel):
-    old_document_id: str = Field(..., min_length=1)
-    new_document_id: str = Field(..., min_length=1)
-
-
-class CompareResponse(BaseModel):
-    analysis_id: str
-    status: AnalysisStatus
-
-
 class UploadAndCompareResponse(BaseModel):
     analysis_id: str
     status: AnalysisStatus

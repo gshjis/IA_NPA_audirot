@@ -126,44 +126,7 @@ curl http://127.0.0.1:8000/health
 
 ## API
 
-### 1. Upload
-
-```bash
-curl -X POST "http://127.0.0.1:8001/documents/upload" \
-  -F "file=@/absolute/path/to/old_version.docx"
-```
-
-Ответ:
-
-```json
-{
-  "document_id": "e4fd8b89-ef61-4e40-8c68-b877a6b2d26d",
-  "filename": "old_version.docx",
-  "uploaded_at": "2026-03-17T10:00:00+00:00"
-}
-```
-
-### 2. Compare
-
-```bash
-curl -X POST "http://127.0.0.1:8001/analysis/compare" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "old_document_id": "OLD_DOC_ID",
-    "new_document_id": "NEW_DOC_ID"
-  }'
-```
-
-Ответ:
-
-```json
-{
-  "analysis_id": "e1820ff3-f071-45f9-b22d-300ca97d57d0",
-  "status": "pending"
-}
-```
-
-### 3. Upload And Compare
+### 1. Upload And Compare
 
 Для фронтенда удобнее использовать одну ручку, которая принимает сразу два файла и запускает анализ:
 
@@ -192,7 +155,7 @@ curl -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \
 }
 ```
 
-### 4. Result
+### 2. Result
 
 ```bash
 curl "http://127.0.0.1:8001/analysis/e1820ff3-f071-45f9-b22d-300ca97d57d0"
@@ -247,6 +210,7 @@ curl "http://127.0.0.1:8001/analysis/e1820ff3-f071-45f9-b22d-300ca97d57d0"
 - Retrieval сервис не изменяется и вызывается только по HTTP.
 - Оба FastAPI сервиса поднимают Swagger UI на `/docs` и schema JSON на `/openapi.json`.
 - Для браузерного фронтенда включен CORS через `BACKEND_CORS_ORIGINS` и `RETRIEVAL_CORS_ORIGINS`.
+- Старые ручки `/documents/upload` и `/analysis/compare` удалены; основной сценарий теперь только через `/analysis/upload-and-compare`.
 - Если данные retrieval (`data/raw/base.json`, `data/processed/laws.json`) отсутствуют, сервис всё равно стартует, но `/search` вернет `503` с описанием проблемы.
 - Если CometAPI или модель sentence-transformers недоступны, backend использует fallback-оценку и продолжает анализ.
 - Все результаты и метаданные хранятся в PostgreSQL, таблицы создаются автоматически при старте backend.

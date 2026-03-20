@@ -39,65 +39,9 @@ curl http://127.0.0.1:8001/health
 {"status":"ok"}
 ```
 
-## 3. Загрузка старого документа
+## 3. Запуск анализа одним запросом
 
 Не добавляй вручную заголовок `Content-Type: multipart/form-data` для `curl` с `-F`, пусть `curl` выставит его сам.
-
-```bash
-curl -X POST "http://127.0.0.1:8001/documents/upload" \
-  -F "file=@/mnt/data/IA_NPA_audirot/backend/examples/documents/old_regulation.docx"
-```
-
-Пример ответа:
-
-```json
-{
-  "document_id": "OLD_DOC_ID",
-  "filename": "old_regulation.docx",
-  "uploaded_at": "2026-03-18T00:00:00+00:00"
-}
-```
-
-## 4. Загрузка нового документа
-
-```bash
-curl -X POST "http://127.0.0.1:8001/documents/upload" \
-  -F "file=@/mnt/data/IA_NPA_audirot/backend/examples/documents/new_regulation.docx"
-```
-
-Пример ответа:
-
-```json
-{
-  "document_id": "NEW_DOC_ID",
-  "filename": "new_regulation.docx",
-  "uploaded_at": "2026-03-18T00:00:00+00:00"
-}
-```
-
-## 5. Запуск сравнения
-
-Подставь `OLD_DOC_ID` и `NEW_DOC_ID` из предыдущих ответов:
-
-```bash
-curl -X POST "http://127.0.0.1:8001/analysis/compare" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "old_document_id": "OLD_DOC_ID",
-    "new_document_id": "NEW_DOC_ID"
-  }'
-```
-
-Пример ответа:
-
-```json
-{
-  "analysis_id": "ANALYSIS_ID",
-  "status": "pending"
-}
-```
-
-## 6. Альтернативно: один запрос с двумя файлами
 
 ```bash
 curl -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \
@@ -124,7 +68,7 @@ curl -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \
 }
 ```
 
-## 7. Получение результата
+## 4. Получение результата
 
 ```bash
 curl "http://127.0.0.1:8001/analysis/ANALYSIS_ID"
@@ -174,18 +118,12 @@ curl "http://127.0.0.1:8001/analysis/ANALYSIS_ID"
 ]
 ```
 
-## 8. Быстрый сценарий через переменные shell
+## 5. Быстрый сценарий через переменные shell
 
 ```bash
-OLD_DOC_ID=$(curl -s -X POST "http://127.0.0.1:8001/documents/upload" \
-  -F "file=@/mnt/data/IA_NPA_audirot/backend/examples/documents/old_regulation.docx" | jq -r '.document_id')
-
-NEW_DOC_ID=$(curl -s -X POST "http://127.0.0.1:8001/documents/upload" \
-  -F "file=@/mnt/data/IA_NPA_audirot/backend/examples/documents/new_regulation.docx" | jq -r '.document_id')
-
-ANALYSIS_ID=$(curl -s -X POST "http://127.0.0.1:8001/analysis/compare" \
-  -H "Content-Type: application/json" \
-  -d "{\"old_document_id\":\"$OLD_DOC_ID\",\"new_document_id\":\"$NEW_DOC_ID\"}" | jq -r '.analysis_id')
+ANALYSIS_ID=$(curl -s -X POST "http://127.0.0.1:8001/analysis/upload-and-compare" \
+  -F "old_file=@/mnt/data/IA_NPA_audirot/backend/examples/documents/old_regulation.docx" \
+  -F "new_file=@/mnt/data/IA_NPA_audirot/backend/examples/documents/new_regulation.docx" | jq -r '.analysis_id')
 
 curl "http://127.0.0.1:8001/analysis/$ANALYSIS_ID"
 ```
