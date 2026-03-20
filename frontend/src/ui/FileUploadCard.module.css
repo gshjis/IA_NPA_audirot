@@ -13,7 +13,11 @@
   text-align: center;
   gap: 1rem;
   padding: 2rem;
-  min-height: 200px;
+  box-sizing: border-box;
+  /* Fixed height: empty state is in-flow; with a file, .fileInfo is absolute and
+     would otherwise collapse the label to min-height only. */
+  height: 18rem;
+  min-height: 18rem;
   border: 2px dashed rgba(20, 35, 21, 0.2);
   border-radius: 12px;
   background: rgba(239, 236, 242, 0.5);
@@ -66,7 +70,12 @@
   font-size: 0.875rem;
   color: rgba(20, 35, 21, 0.65);
   line-height: 1.5;
-  flex: 1;
+}
+
+.fileInfo .cardDesc {
+  flex-shrink: 0;
+  padding-bottom: 0.25rem;
+  text-align: center;
 }
 
 .fileLabel {

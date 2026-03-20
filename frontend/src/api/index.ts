@@ -1,2 +1,2 @@
-export { uploadAndCompare, getAnalysis } from "./uploadAndCompare";
-export type { UploadAndCompareResponse } from "./types";
+export { uploadAndCompare, getAnalysis, getAnalysisStats } from "./uploadAndCompare";
+export type { AnalysisStatsResponse, UploadAndCompareResponse } from "./types";

@@ -2,22 +2,21 @@ import { useState, useEffect } from "react";
 import { extractChangeRows } from "../api/analysisParse";
 import type { AnalysisChangeRow } from "../api/analysisTypes";
 import { uploadAndCompare, getAnalysis } from "../api";
-import { MOCK_ANALYSIS_ROWS } from "../data/mockAnalysisRows";
 import { Icon } from "../icons/Icon";
 import { AnalysisResultsView } from "./AnalysisResultsView";
 import { FileUploadCard } from "./FileUploadCard";
 import styles from "./FileUploadSection.module.css";
 
-/** `true` — демо с моком без бэкенда. `false` — реальный upload + polling. */
-const USE_MOCK_ANALYSIS = true;
-
-const MOCK_DELAY_MS = 1600;
 const POLL_INTERVAL_MS = 5000;
 
-type Phase = "upload" | "analyzing" | "results";
+export type FileUploadPhase = "upload" | "analyzing" | "results";
 
 type FileUploadSectionProps = {
   onAnalysisRowsChange?: (rows: AnalysisChangeRow[] | null) => void;
+  /** Вызывается при первом показе формы загрузки и при возврате к ней (например «Новое сравнение»). */
+  onUploadPhaseActive?: () => void;
+  /** Сообщает родителю о смене фазы (для раскладки: сайдбар сверху во время анализа/результатов). */
+  onPhaseChange?: (phase: FileUploadPhase) => void;
 };
 
 function analysisStatus(data: unknown): string | undefined {
@@ -36,8 +35,10 @@ function isValidFile(file: File | null): boolean {
 
 export function FileUploadSection({
   onAnalysisRowsChange,
+  onUploadPhaseActive,
+  onPhaseChange,
 }: FileUploadSectionProps) {
-  const [phase, setPhase] = useState<Phase>("upload");
+  const [phase, setPhase] = useState<FileUploadPhase>("upload");
   const [oldFile, setOldFile] = useState<File | null>(null);
   const [newFile, setNewFile] = useState<File | null>(null);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
@@ -59,11 +60,21 @@ export function FileUploadSection({
   }, [bothValid]);
 
   useEffect(() => {
+    if (phase === "upload") {
+      onUploadPhaseActive?.();
+    }
+  }, [phase, onUploadPhaseActive]);
+
+  useEffect(() => {
+    onPhaseChange?.(phase);
+  }, [phase, onPhaseChange]);
+
+  useEffect(() => {
     onAnalysisRowsChange?.(resultRows);
   }, [resultRows, onAnalysisRowsChange]);
 
   useEffect(() => {
-    if (!analysisId || USE_MOCK_ANALYSIS) return;
+    if (!analysisId) return;
     let cancelled = false;
     let isFirst = true;
     let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -107,7 +118,7 @@ export function FileUploadSection({
   }, [analysisId]);
 
   useEffect(() => {
-    if (USE_MOCK_ANALYSIS || !analysisData || phase !== "analyzing") return;
+    if (!analysisData || phase !== "analyzing") return;
 
     if (analysisData !== null && typeof analysisData === "object" && "error" in analysisData) {
       setError(String((analysisData as { error: unknown }).error));
@@ -124,12 +135,14 @@ export function FileUploadSection({
       setResultRows(rows);
       setRawFallback(null);
       setPhase("results");
+      setAnalysisId(null);
       return;
     }
 
     setResultRows(null);
     setRawFallback(analysisData);
     setPhase("results");
+    setAnalysisId(null);
   }, [analysisData, phase]);
 
   const resetToUpload = () => {
@@ -152,17 +165,6 @@ export function FileUploadSection({
     setError(null);
     setRawFallback(null);
     setResultRows(null);
-
-    if (USE_MOCK_ANALYSIS) {
-      setPhase("analyzing");
-      setLoading(true);
-      window.setTimeout(() => {
-        setLoading(false);
-        setResultRows(MOCK_ANALYSIS_ROWS);
-        setPhase("results");
-      }, MOCK_DELAY_MS);
-      return;
-    }
 
     setLoading(true);
     setAnalysisData(null);
@@ -231,11 +233,9 @@ export function FileUploadSection({
               <div className={styles.loader}>
                 <span className={styles.loaderSpinner} />
                 <span>
-                  {USE_MOCK_ANALYSIS
-                    ? "Имитация анализа…"
-                    : analysisLoading && !analysisData
-                      ? "Загрузка анализа…"
-                      : "Анализ выполняется…"}
+                  {analysisLoading && !analysisData
+                    ? "Загрузка анализа…"
+                    : "Анализ выполняется…"}
                 </span>
               </div>
               <div className={styles.tableSkeleton} aria-hidden>

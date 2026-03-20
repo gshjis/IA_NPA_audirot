@@ -81,17 +81,67 @@
 .trackBar {
   display: flex;
   align-items: stretch;
+  flex-wrap: nowrap;
   gap: 3px;
   min-height: 44px;
   padding: 4px;
   background: rgba(20, 35, 21, 0.06);
   border-radius: 10px;
   border: 1px solid rgba(20, 35, 21, 0.08);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.trackPagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1rem;
+}
+
+.trackPageBtn {
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-semibold);
+  font-family: inherit;
+  color: rgba(20, 35, 21, 0.85);
+  background: var(--white);
+  border: 1px solid rgba(20, 35, 21, 0.18);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.trackPageBtn:hover:not(:disabled) {
+  background: rgba(20, 35, 21, 0.04);
+  border-color: rgba(20, 35, 21, 0.28);
+}
+
+.trackPageBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.trackPageInfo {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  color: rgba(20, 35, 21, 0.72);
+  text-align: center;
+}
+
+.trackPageRange {
+  font-weight: var(--font-weight-normal);
+  color: rgba(20, 35, 21, 0.55);
 }
 
 .trackSegment {
   flex: 1 1 0;
-  min-width: 0;
+  min-width: 64px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -101,33 +151,47 @@
   border-radius: 6px;
   font-size: 0.6875rem;
   font-weight: var(--font-weight-semibold);
-  color: rgba(255, 255, 255, 0.95);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
+  text-shadow: none;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* Палитра как у .riskPill — дорожка, легенда и ячейка «Риск» в таблице */
+.riskPill[data-risk="green"],
+.trackSegment[data-risk="green"],
+.swatchGreen {
+  background: rgba(80, 172, 95, 0.2);
+}
+
+.riskPill[data-risk="green"],
 .trackSegment[data-risk="green"] {
-  background: linear-gradient(160deg, #5cbf6a 0%, var(--green) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  color: #2d6b36;
 }
 
+.riskPill[data-risk="yellow"],
+.trackSegment[data-risk="yellow"],
+.swatchYellow {
+  background: rgba(230, 180, 34, 0.25);
+}
+
+.riskPill[data-risk="yellow"],
 .trackSegment[data-risk="yellow"] {
-  background: linear-gradient(160deg, #f0c14d 0%, #d9a21a 100%);
-  color: #3d2910;
-  text-shadow: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #6b5200;
 }
 
+.riskPill[data-risk="red"],
+.trackSegment[data-risk="red"],
+.swatchRed {
+  background: rgba(205, 83, 83, 0.22);
+}
+
+.riskPill[data-risk="red"],
 .trackSegment[data-risk="red"] {
-  background: linear-gradient(160deg, #e57373 0%, #c62828 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  color: #8b2a2a;
 }
 
 .trackSegment:hover {
   transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 4px 12px rgba(20, 35, 21, 0.12);
+  box-shadow: 0 4px 12px rgba(20, 35, 21, 0.12);
 }
 
 .trackArticle {
@@ -160,22 +224,12 @@
 }
 
 .swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
   flex-shrink: 0;
-}
-
-.swatchGreen {
-  background: var(--green);
-}
-
-.swatchYellow {
-  background: #e6b422;
-}
-
-.swatchRed {
-  background: var(--red);
+  box-shadow: inset 0 0 0 1px rgba(20, 35, 21, 0.08);
 }
 
 .tableSection {
@@ -255,21 +309,6 @@
   white-space: nowrap;
 }
 
-.riskPill[data-risk="green"] {
-  background: rgba(80, 172, 95, 0.2);
-  color: #2d6b36;
-}
-
-.riskPill[data-risk="yellow"] {
-  background: rgba(230, 180, 34, 0.25);
-  color: #6b5200;
-}
-
-.riskPill[data-risk="red"] {
-  background: rgba(205, 83, 83, 0.22);
-  color: #8b2a2a;
-}
-
 .typePill {
   display: inline-block;
   padding: 0.15rem 0.45rem;
@@ -286,12 +325,7 @@
 }
 
 @media (max-width: 640px) {
-  .trackBar {
-    flex-wrap: wrap;
-  }
-
   .trackSegment {
-    flex: 1 1 calc(33.333% - 3px);
-    min-width: 56px;
+    min-width: 52px;
   }
 }

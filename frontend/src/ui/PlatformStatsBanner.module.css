@@ -80,17 +80,12 @@
   min-width: 0;
 }
 
-.metric[data-accent="found"] .metricIcon {
+.metric[data-accent="docs"] .metricIcon {
   background: linear-gradient(135deg, rgba(80, 172, 95, 0.2) 0%, rgba(80, 172, 95, 0.06) 100%);
   color: var(--green);
 }
 
-.metric[data-accent="critical"] .metricIcon {
-  background: linear-gradient(135deg, rgba(205, 83, 83, 0.2) 0%, rgba(205, 83, 83, 0.06) 100%);
-  color: var(--red);
-}
-
-.metric[data-accent="pending"] .metricIcon {
+.metric[data-accent="changes"] .metricIcon {
   background: linear-gradient(135deg, rgba(223, 160, 83, 0.22) 0%, rgba(223, 160, 83, 0.06) 100%);
   color: var(--orange);
 }
@@ -132,12 +127,35 @@
   line-height: 1.1;
 }
 
-.metricSubtitle {
-  margin-top: 0.15rem;
-  font-size: 0.6875rem;
-  font-weight: var(--font-weight-normal);
-  color: rgba(20, 35, 21, 0.52);
-  line-height: 1.35;
+.skeleton {
+  display: block;
+  height: 1.4rem;
+  width: 4rem;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(20, 35, 21, 0.06) 0%,
+    rgba(20, 35, 21, 0.1) 50%,
+    rgba(20, 35, 21, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: platformStatsShimmer 1.1s ease-in-out infinite;
+}
+
+@keyframes platformStatsShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: rgba(20, 35, 21, 0.08);
+  }
 }
 
 .divider {
@@ -152,3 +170,11 @@
     transparent 100%
   );
 }
+
+.hint {
+  margin: 0.65rem 0 0 0;
+  font-size: 0.6875rem;
+  color: rgba(205, 83, 83, 0.9);
+  line-height: 1.2;
+}
+

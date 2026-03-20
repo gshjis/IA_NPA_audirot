@@ -1,0 +1,68 @@
+.section {
+  margin-bottom: 2rem;
+  width: 100%;
+}
+
+.card {
+  border-radius: 16px;
+  border: 1px solid var(--gray);
+  background-color: var(--white-soft);
+  padding: 2rem 2.25rem;
+  box-shadow: 0 2px 12px rgba(20, 35, 21, 0.06);
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 1.5rem 1.25rem;
+  }
+}
+
+.heading {
+  margin: 0 0 0.35rem 0;
+  font-size: 1.375rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--black);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.lead {
+  margin: 0 0 1.25rem 0;
+  font-size: 1rem;
+  font-weight: var(--font-weight-normal);
+  color: rgba(20, 35, 21, 0.75);
+  line-height: 1.5;
+}
+
+.accordion {
+  width: 100%;
+}
+
+.item {
+  border-bottom: 1px solid rgba(20, 35, 21, 0.1);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.trigger {
+  width: 100%;
+  padding: 0.9rem 0;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--black);
+}
+
+.trigger:hover {
+  color: rgba(20, 35, 21, 0.88);
+}
+
+.content {
+  padding-bottom: 1rem;
+  font-size: 1rem;
+  font-weight: var(--font-weight-normal);
+  color: rgba(20, 35, 21, 0.75);
+  line-height: 1.55;
+}

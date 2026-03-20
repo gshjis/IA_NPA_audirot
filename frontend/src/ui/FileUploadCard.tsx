@@ -68,7 +68,6 @@ export function FileUploadCard({
   return (
     <div className={styles.wrapper}>
       <h3 className={styles.cardTitle}>{title}</h3>
-      <p className={styles.cardDesc}>{description}</p>
       <label
         className={`${styles.uploadCard} ${hasError ? styles.uploadCardError : ""}`}
       >
@@ -81,6 +80,7 @@ export function FileUploadCard({
         />
         {file ? (
           <div className={styles.fileInfo}>
+            <p className={styles.cardDesc}>{description}</p>
             <div className={styles.previewArea}>
               {isPdf && previewUrl ? (
                 <iframe
@@ -112,6 +112,7 @@ export function FileUploadCard({
           </div>
         ) : (
           <>
+            <p className={styles.cardDesc}>{description}</p>
             <div className={styles.iconCircle}>{icon}</div>
             <span className={styles.fileLabel}>
               <Icon name="clip" size={16} />
