@@ -37,7 +37,7 @@ app.add_middleware(
 TAGS_PATH = os.getenv("RETRIEVAL_TAGS_PATH", "data/raw/base.json")
 CORPUS_PATH = os.getenv("RETRIEVAL_CORPUS_PATH", "data/processed/laws.json")
 MODEL_NAME = os.getenv("RETRIEVAL_MODEL_NAME", "deepvk/USER2-base")
-CACHE_DIR = os.getenv("RETRIEVAL_CACHE_DIR", "scripts/data/cache")
+CACHE_DIR = os.getenv("RETRIEVAL_CACHE_DIR", "/home/gshjis/Python_projects/IA_NPA_audirot/data/processed/cache/engine")
 
 engine: LegalSemanticSearchEngine | None = None
 engine_init_error: str | None = None
@@ -48,10 +48,10 @@ def _init_engine() -> None:
 
     try:
         corpus = load_json(CORPUS_PATH) if os.path.exists(CORPUS_PATH) else []
+        # В текущем движке загрузка корпуса осуществляется из laws_filepath.
         engine = LegalSemanticSearchEngine(
             tags_filepath=TAGS_PATH,
-            model_name=MODEL_NAME,
-            training_corpus=corpus,
+            laws_filepath=CORPUS_PATH,
             cache_dir=CACHE_DIR,
         )
         engine_init_error = None
@@ -82,33 +82,36 @@ async def search(request: SearchRequest):
             ),
         )
 
-    results_list = []
-    
-    for req_id, query_text in request.queries.items():
-        try:
-            # Поиск статей
-            found_articles = engine.find_articles_by_new_sentence(
-                query_text,
-                k=request.k,
-                similarity_weight=request.similarity_weight,
-                coverage_weight=request.coverage_weight,
-                penalty_factor=request.penalty_factor
+    # Пакетный поиск по списку запросов
+    queries_in_order = list(request.queries.keys())
+    query_texts = [request.queries[qid] for qid in queries_in_order]
+
+    batch_results = engine.search_batch(
+        query_texts,
+        k=request.k,
+        semantic_weight=request.similarity_weight,
+    )
+
+    results_list: List[SearchResponse] = []
+
+    for req_id, per_query_results in zip(queries_in_order, batch_results):
+        mapped_results: List[SearchResult] = []
+
+        for res in per_query_results:
+            q_tags = res.get("query_tags", [])[:5] or []
+            a_tags = res.get("tags", []) or res.get("article_tags", [])[:5] or []
+            common = sorted(list(set(q_tags) & set(a_tags)))
+
+            mapped_results.append(
+                SearchResult(
+                    article=res.get("meta") or res.get("article") or {},
+                    score=float(res.get("score", 0.0)),
+                    query_tags={t: 1.0 for t in q_tags},
+                    article_tags={t: 1.0 for t in a_tags[:5]},
+                    common_tags=common,
+                )
             )
-            
-            # Формирование ответа
-            results_list.append(SearchResponse(
-                request_id=req_id,
-                results=[
-                    SearchResult(
-                        article=res["article"],
-                        score=res["score"],
-                        query_tags=res["query_tags"],
-                        article_tags=res["article_tags"],
-                        common_tags=res["common_tags"]
-                    ) for res in found_articles
-                ]
-            ))
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Ошибка при обработке запроса {req_id}: {str(e)}")
-            
+
+        results_list.append(SearchResponse(request_id=req_id, results=mapped_results))
+
     return results_list

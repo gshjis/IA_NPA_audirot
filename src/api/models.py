@@ -6,9 +6,17 @@ class SearchRequest(BaseModel):
     # Запрос представляет собой словарь, где ключи - ID (строки), значения - тексты запросов
     queries: Dict[str, str] = Field(..., description="Словарь запросов: {id: текст_запроса}")
     k: int = Field(5, description="Количество возвращаемых статей", ge=1)
+    # В текущей реализации engine параметр называется semantic_weight
     similarity_weight: float = Field(0.4, description="Вес косинусного сходства", ge=0.0, le=1.0)
     coverage_weight: float = Field(0.6, description="Вес покрытия тегов", ge=0.0, le=1.0)
     penalty_factor: float = Field(0.5, description="Коэффициент штрафа", ge=0.0, le=1.0)
+
+    # Параметр для совместимости со старым названием API в frontend/back.
+    # На текущем этапе игнорируется, т.к. engine использует поиск через свои эвристики.
+    use_batch: bool = Field(
+        True,
+        description="Выполнять поиск пакетно (через search_batch), если поддерживается движком",
+    )
 
 class SearchResult(BaseModel):
     article: Dict[str, Any]
