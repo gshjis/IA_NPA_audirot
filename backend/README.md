@@ -74,6 +74,8 @@ export SEMANTIC_MODEL_LOCAL_ONLY="false"
 docker compose up --build
 ```
 
+Для самого быстрого docker-старта backend собирается как облегчённый образ без `sentence-transformers`, поэтому внутри контейнера semantic comparison использует fallback. Retrieval остаётся полноценным и продолжает работать через свой семантический движок.
+
 2. Swagger/OpenAPI для фронтендера:
 
 - Backend Swagger: `http://127.0.0.1:8001/docs`

@@ -108,6 +108,13 @@ docker compose down
 docker compose logs -f
 ```
 
+Для самого быстрого docker-старта используется облегчённый backend-образ:
+
+- `poetry` не ставится внутрь образов
+- backend собирается отдельно от retrieval
+- в backend-образ не ставится `sentence-transformers`, поэтому semantic comparison в нём работает через уже существующий fallback
+- retrieval остаётся полноценным и по-прежнему использует семантический поиск
+
 ### 4. Проверка, что всё поднялось
 
 Swagger и OpenAPI:
